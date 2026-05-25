@@ -1,0 +1,77 @@
+# 测点定义（04.24 §2.2）
+tags:
+  - id: engine.cyl.{i}.exhaust_temp     # i = 1..8
+    range: [0, 450]
+    unit: ℃
+    rate_hz: 1
+    noise_pct: 1.0
+  - id: engine.exh.manifold
+    range: [0, 500]
+    unit: ℃
+    rate_hz: 1
+    noise_pct: 1.0
+  - id: shaft.bearing.intermediate.temp
+    range: [0, 120]
+    unit: ℃
+    rate_hz: 2
+    noise_pct: 0.8
+  - id: engine.lube.temp
+    range: [0, 150]
+    unit: ℃
+    rate_hz: 1
+    noise_pct: 0.5
+  - id: engine.scav.pressure
+    range: [0, 10]
+    unit: bar(g)
+    rate_hz: 1
+    noise_pct: 0.5
+  - id: engine.cyl.{i}.pmax
+    range: [0, 200]
+    unit: bar
+    rate_hz: 10
+    noise_pct: 1.0
+  - id: engine.lube.pressure
+    range: [0, 10]
+    unit: bar
+    rate_hz: 1
+    noise_pct: 0.5
+  - id: engine.rpm
+    range: [0, 100]
+    unit: rpm
+    rate_hz: 10
+    noise_pct: 0.3
+  - id: engine.power
+    range: [0, 45000]
+    unit: kW
+    rate_hz: 1
+    noise_pct: 0.5
+  - id: engine.load_pct
+    range: [0, 105]
+    unit: '%'
+    rate_hz: 2
+    noise_pct: 0.5
+  - id: electric.bus.voltage
+    range: [380, 480]
+    unit: V
+    rate_hz: 1
+    noise_pct: 0.3
+  - id: electric.bus.frequency
+    range: [55, 62]
+    unit: Hz
+    rate_hz: 1
+    noise_pct: 0.1
+  - id: electric.bus.current
+    range: [0, 4500]
+    unit: A
+    rate_hz: 1
+    noise_pct: 0.5
+  - id: electric.bus.active_power
+    range: [0, 2500]
+    unit: kW
+    rate_hz: 1
+    noise_pct: 0.3
+  - id: vibration.shaft.rms
+    range: [0, 20]
+    unit: mm/s
+    rate_hz: 5
+    noise_pct: 1.0

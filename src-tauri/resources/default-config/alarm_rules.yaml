@@ -1,0 +1,65 @@
+# 报警规则库（04.24 §2.3）
+rules:
+  - id: A_SCAV_PRESS_LOW
+    tag: engine.scav.pressure
+    op: '<'
+    threshold: 3.0
+    level: 2
+    hold_sec: 5
+    action: alert
+    message: 扫气压力过低
+  - id: A_CYL_EXH_HIGH
+    tag: engine.cyl.*.exhaust_temp
+    op: '>'
+    threshold: 430
+    level: 3
+    hold_sec: 3
+    action: [alert, log]
+    message: 单缸排温超限
+  - id: A_EXH_MANIFOLD_HIGH
+    tag: engine.exh.manifold
+    op: '>'
+    threshold: 450
+    level: 3
+    hold_sec: 3
+    action: [alert, log]
+    message: 排烟总管温度过高
+  - id: A_BEARING_TEMP_HIGH
+    tag: shaft.bearing.intermediate.temp
+    op: '>'
+    threshold: 75
+    level: 3
+    hold_sec: 5
+    action: [alert, suggest_stop]
+    message: 中间轴承温度过高
+  - id: A_PMAX_HIGH
+    tag: engine.cyl.*.pmax
+    op: '>'
+    threshold: 190
+    level: 2
+    hold_sec: 0
+    action: [alert]
+    message: 爆发压力超限
+  - id: A_POWER_OVER
+    tag: engine.power
+    op: '>'
+    threshold: 42310
+    level: 3
+    hold_sec: 0
+    action: [alert]
+    message: 输出功率超限
+  - id: A_RPM_OVER
+    tag: engine.rpm
+    op: '>'
+    threshold: 85
+    level: 3
+    hold_sec: 0
+    action: [fuel_cut, air_brake]
+    message: 主机超速
+  - id: A_OVERLOAD_COMPOSITE
+    type: composite
+    expr: 'count_true([engine.power>42310, engine.rpm>85, engine.cyl.*.pmax>190, engine.exh.manifold>400, shaft.bearing.intermediate.temp>75]) >= 2'
+    level: 3
+    hold_sec: 30
+    action: alc_auto_reduce
+    message: 主机超负荷（复合判定）

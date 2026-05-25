@@ -1,0 +1,38 @@
+# 车钟档位定义（04.24 §车钟档位划分）
+positions:
+  - code: STOP
+    name: 停车位
+    en: STOP
+    load_range: [0, 0]
+    rpm: 0
+    note: 燃油切断 + 启动空气隔离
+  - code: DEAD_SLOW_AHEAD
+    name: 微速正车
+    en: DEAD SLOW AHEAD
+    load_range: [10, 20]
+    rpm: 30
+    note: 冷启动暖机模式入口
+  - code: SLOW_AHEAD
+    name: 慢速正车
+    en: SLOW AHEAD
+    load_range: [20, 35]
+    rpm: 38
+    note: 临界转速避让区 (41-50 rpm)
+  - code: HALF_AHEAD
+    name: 半速正车
+    en: HALF AHEAD
+    load_range: [35, 60]
+    rpm: 52
+    note: 经济负荷优化模式
+  - code: FULL_AHEAD
+    name: 全速正车
+    en: FULL AHEAD
+    load_range: [60, 100]
+    rpm: 63
+    note: 增压器自动匹配
+  - code: NAV_FULL
+    name: 航行全速
+    en: NAV FULL
+    load_range: [100, 100]
+    rpm: 80
+    note: 连续运行许可状态

@@ -1,0 +1,57 @@
+# 主线剧本：系泊试验 + 中间轴承间隙过小（04.12 + 04.24 综合）
+scenario: mooring_test_main
+duration_sec: 600
+time_scale_default: 8
+
+events:
+  - at: 0
+    cmd: telegraph.set
+    args: STOP
+  - at: 5
+    cmd: telegraph.set
+    args: DEAD_SLOW_AHEAD
+  - at: 60
+    cmd: telegraph.set
+    args: SLOW_AHEAD
+  - at: 120
+    cmd: telegraph.set
+    args: HALF_AHEAD
+  - at: 200
+    cmd: telegraph.set
+    args: FULL_AHEAD
+  - at: 280
+    cmd: telegraph.set
+    args: NAV_FULL
+  - when: 'engine.rpm >= 76'
+    inject:
+      fault: BEARING_CLEARANCE_LOW
+      params:
+        clearance_mm: 0.24
+        mu_factor: 3.5
+
+expected_alarms:
+  - A_BEARING_TEMP_HIGH
+  - A_CYL_EXH_HIGH
+  - A_EXH_MANIFOLD_HIGH
+
+restore_path:
+  - measure: feeler_gauge.4points
+  - condition: 'min(clearance) >= 0.30 AND avg(clearance) >= 0.32'
+  - action: restart_engine
+  - target:
+      bearing_temp_c: 55
+      load: stable
+
+scoring:
+  - id: telegraph_compliance
+    weight: 25
+    desc: 车钟逐级加速合规
+  - id: alarm_response_time
+    weight: 25
+    desc: 报警发出至停车的延迟（≤15 秒满分）
+  - id: diagnosis_accuracy
+    weight: 25
+    desc: 一次锁定真实故障
+  - id: repair_precision
+    weight: 25
+    desc: 修复后间隙 ≥ 0.32 mm

@@ -1,0 +1,23 @@
+# 电站时序（04.24 §电压、电流、频率动态变化时间线）
+timeline:
+  - { t_sec: 0,   stage: 启动指令,        voltage_v: 440, voltage_peak: 380, freq_hz: 60.0, freq_dip: 58.5, current_a: 500,  current_peak: 4200, active_kw: 50,   active_peak: 1800 }
+  - { t_sec: 5,   stage: 点火成功怠速,    voltage_v: 435, freq_hz: 59.8, current_a: 1200, active_kw: 500 }
+  - { t_sec: 30,  stage: 10pct_load,    voltage_v: 438, freq_hz: 59.9, current_a: 1500, active_kw: 750 }
+  - { t_sec: 120, stage: 暖机完成30pct,   voltage_v: 440, freq_hz: 60.0, current_a: 1800, active_kw: 1100 }
+  - { t_sec: 180, stage: 50pct_load,    voltage_v: 442, freq_hz: 60.1, current_a: 2200, active_kw: 1450 }
+  - { t_sec: 240, stage: 80pct_load,    voltage_v: 438, freq_hz: 59.8, current_a: 2700, active_kw: 1850 }
+  - { t_sec: 300, stage: 100pct稳态,     voltage_v: 440, freq_hz: 60.0, current_a: 3100, active_kw: 2200 }
+
+limits:
+  voltage:
+    nominal: 440
+    tol_pct: 5
+    avr_trip: 480
+  frequency:
+    nominal: 60
+    tol_hz: 0.5
+    underfreq_load_shed: 59
+  current:
+    nominal_range: [2800, 3200]
+    tol_pct: 10
+    over_trip: 3500

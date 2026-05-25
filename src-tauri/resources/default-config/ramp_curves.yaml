@@ -1,0 +1,28 @@
+# 标准升温曲线 / 扫气压力曲线 / 转速-负荷曲线（04.24 §2.1）
+
+exhaust_temp_ramp:
+  desc: 冷启动 -> 100%负荷（环境25℃，ISO条件）
+  unit: ℃
+  points:
+    - { t_sec: 0,   load: cold_start,  avg_temp: 80,  rate_c_per_min: null,  spread_c: null }
+    - { t_sec: 30,  load: idle,        avg_temp: 150, rate_c_per_min: 35,    spread_c: 20 }
+    - { t_sec: 120, load: warm_done,   avg_temp: 170, rate_c_per_min: 10,    spread_c: 25 }
+    - { t_sec: 180, load: 50_pct,      avg_temp: 280, rate_c_per_min: 55,    spread_c: 30 }
+    - { t_sec: 300, load: 100_pct,     avg_temp: 420, rate_c_per_min: 28,    spread_c: 35 }
+
+scav_pressure_curve:
+  unit: bar(g)
+  points:
+    - { load_pct: 0,   p: 0.20, gradient: 0,    note: 涡轮未工作 }
+    - { load_pct: 30,  p: 0.90, gradient: 0.15, note: 暖机结束 }
+    - { load_pct: 50,  p: 1.60, gradient: 0.25, note: 增压器高效区 }
+    - { load_pct: 80,  p: 2.30, gradient: 0.30, note: EGB 阀部分开启 }
+    - { load_pct: 100, p: 2.85, gradient: 0.15, note: 增压器极限 }
+
+rpm_load_curve:
+  points:
+    - { rpm_pct: 60,  load_pct: 22, power_kw: 9308,  torque_pct: 45 }
+    - { rpm_pct: 75,  load_pct: 42, power_kw: 17770, torque_pct: 68 }
+    - { rpm_pct: 85,  load_pct: 65, power_kw: 27502, torque_pct: 92 }
+    - { rpm_pct: 92,  load_pct: 85, power_kw: 35964, torque_pct: 105 }
+    - { rpm_pct: 100, load_pct: 100, power_kw: 42310, torque_pct: 108 }

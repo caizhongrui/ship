@@ -1,0 +1,36 @@
+# 主机基础参数库（来源：04.24 §2.1）
+engine:
+  model: MAN B&W 8G95ME-C
+  cylinders: 8
+  stroke_mm: 950
+  rated_rpm: 80
+  rated_power_kw: 42310           # 5300 × 8
+  cyl_power_kw: 5300
+  pmax_bar: 195
+  scav_pressure_mcr_bar:
+    min: 2.8
+    max: 2.9
+  cyl_exhaust_mcr_c:
+    min: 410
+    max: 420
+  rpm_overlimit: 84
+  shaft_output_rpm: 79
+  shaft_efficiency: 0.9875
+
+bearing:
+  intermediate:
+    diameter_mm: 170
+    clearance_min_mm: 0.32
+    clearance_max_mm: 0.35
+    temp_warn_c: 75
+    temp_alarm_c: 90
+
+# 启动相关
+startup:
+  total_time_sec: 300            # 04.24 暂定 300 秒（待确认）
+  time_scale_default: 1
+  time_scale_options: [1, 2, 5, 8, 10]
+
+# 异常注入触发条件（主线剧本）
+fault_inject:
+  trigger_rpm: 76

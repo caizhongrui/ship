@@ -1,0 +1,177 @@
+/* 浅紫灰工业风主题（参照 Wärtsilä / MAN B&W 标准 HMI） */
+
+:root {
+  /* 背景层级 */
+  --c-bg: #a5a3b8; /* 全局底，浅紫灰 */
+  --c-bg-panel: #ecebf1; /* 面板（白偏紫） */
+  --c-bg-panel-alt: #d6d4dc; /* 二级面板/表头 */
+  --c-bg-header: #6e6a8c; /* 顶/底栏深紫 */
+  --c-bg-active: #ffffff; /* 选中/高亮 */
+  --c-bg-row-alt: #dedce4; /* 表格交替行 */
+
+  /* 边框 */
+  --c-border: #5e5b78; /* 主边框（深紫） */
+  --c-border-soft: #b6b4c2; /* 弱边框 */
+
+  /* 文字 */
+  --c-text: #1f1e33; /* 主文字（深海军蓝） */
+  --c-text-2: #4a4660; /* 二级文字 */
+  --c-text-muted: #7a7790;
+  --c-text-inv: #ffffff; /* 反色（深底白字） */
+
+  /* 状态色 */
+  --c-accent: #c73b3b; /* 红 — 报警/选中 */
+  --c-warn: #e8b838; /* 黄 — 警告 */
+  --c-ok: #7ab47c; /* 绿 — 正常 */
+  --c-info: #6e84a0; /* 蓝 — 信息 */
+  --c-alarm-1: #e8b838;
+  --c-alarm-2: #d67a2e;
+  --c-alarm-3: #c73b3b;
+
+  /* 尺寸 */
+  --header-h: 44px;
+  --sidebar-w: 200px;
+  --status-h: 30px;
+  --radius: 3px;
+
+  --font-cn: "Microsoft YaHei", "PingFang SC", "Source Han Sans CN", system-ui,
+    sans-serif;
+  --font-num: "JetBrains Mono", "Roboto Mono", Consolas, "Courier New",
+    monospace;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: var(--font-cn);
+  font-size: 13px;
+  overflow: hidden;
+  user-select: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--c-border-soft);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ==== 通用工业面板 ==== */
+.ind-panel {
+  background: var(--c-bg-panel);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  box-shadow: inset 0 1px 0 #fff;
+}
+.ind-panel__title {
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  padding: 5px 8px;
+  background: var(--c-bg-panel-alt);
+  color: var(--c-text);
+  border-bottom: 1px solid var(--c-border-soft);
+  letter-spacing: 1px;
+}
+.ind-panel__body {
+  flex: 1;
+  min-height: 0;
+  padding: 8px;
+  overflow: hidden;
+}
+
+/* 等宽数字 */
+.num {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 主标题样式 */
+.title-accent {
+  color: var(--c-accent);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 2px;
+}
+
+/* ==== Element Plus 浅色覆盖 ==== */
+.el-table {
+  --el-table-bg-color: var(--c-bg-panel);
+  --el-table-tr-bg-color: var(--c-bg-panel);
+  --el-table-header-bg-color: var(--c-bg-panel-alt);
+  --el-table-border-color: var(--c-border-soft);
+  --el-table-text-color: var(--c-text);
+  --el-table-header-text-color: var(--c-text);
+  --el-table-row-hover-bg-color: var(--c-bg-row-alt);
+  background: var(--c-bg-panel);
+  color: var(--c-text);
+}
+.el-table th.el-table__cell,
+.el-table tr {
+  background: var(--c-bg-panel);
+}
+.el-table td.el-table__cell {
+  background: var(--c-bg-panel);
+}
+.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: var(--c-bg-row-alt) !important;
+}
+.el-button {
+  --el-button-bg-color: var(--c-bg-panel);
+  --el-button-text-color: var(--c-text);
+  --el-button-border-color: var(--c-border-soft);
+  --el-button-hover-bg-color: var(--c-bg-panel-alt);
+}
+.el-button--primary {
+  --el-button-bg-color: var(--c-accent);
+  --el-button-border-color: var(--c-accent);
+  --el-button-text-color: #fff;
+}
+.el-input__wrapper {
+  background: var(--c-bg-panel);
+  box-shadow: 0 0 0 1px var(--c-border-soft) inset;
+}
+.el-input__inner {
+  color: var(--c-text);
+}
+.el-dialog {
+  background: var(--c-bg-panel);
+  color: var(--c-text);
+}
+.el-dialog__title {
+  color: var(--c-text);
+}
+.el-select-dropdown,
+.el-popper {
+  background: var(--c-bg-panel) !important;
+  color: var(--c-text) !important;
+  border: 1px solid var(--c-border-soft) !important;
+}
+.el-select-dropdown__item {
+  color: var(--c-text);
+}
+.el-select-dropdown__item.hover,
+.el-select-dropdown__item:hover {
+  background: var(--c-bg-panel-alt);
+}

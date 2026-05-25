@@ -1,0 +1,56 @@
+# 故障诊断规则库（IF-THEN 正向推理）
+# 当前与 src/workers/diagnosis.worker.ts 的内置规则保持一致；
+# 后续将由 worker 启动时读取此 YAML（通过 io/yamlLoader）。
+rules:
+  - id: R12
+    fault: 中间轴承间隙过小
+    priority: 100
+    confidence: 0.85
+    when:
+      - 'shaft.bearing.intermediate.temp > 75'
+      - 'engine.rpm > 70'
+      - 'vibration.shaft.rms > 6'
+    min_match: 2
+    advice: |
+      用 0.05mm 塞尺测中间轴承四面间隙：
+      • 正常：插入深度 ≥30mm（间隙 ≥0.32mm）
+      • 异常：插入深度 ~15mm（间隙 ~0.24mm）
+      将间隙调整至 0.32mm 以上后重启复检。
+
+  - id: R20
+    fault: 燃烧失衡（多缸喷油量超标）
+    priority: 80
+    confidence: 0.6
+    when:
+      - 'count(engine.cyl.*.pmax > 190) >= 2'
+      - 'any(engine.cyl.*.exhaust_temp > 430)'
+    advice: |
+      检查燃油分油机黏度（应 ≥180 cSt）；
+      核对喷油定时与喷油器密封性；
+      必要时更换喷油嘴。
+
+  - id: R31
+    fault: 增压系统失效（涡轮结焦/喷嘴环堵塞）
+    priority: 70
+    confidence: 0.55
+    when:
+      - 'engine.load_pct > 80'
+      - 'engine.scav.pressure < 2.5'
+    advice: |
+      检查涡轮增压器叶片积碳；
+      清洗扫气箱与空冷器；
+      核查燃油含硫量与水洗周期。
+
+  - id: R40
+    fault: 主机超负荷
+    priority: 60
+    confidence: 0.5
+    when:
+      - 'engine.power > 41000'
+      - 'engine.rpm > 85'
+      - 'any(engine.cyl.*.pmax > 195)'
+      - 'engine.exh.manifold > 400'
+    min_match: 2
+    advice: |
+      手动降速；切换至指数控制模式；
+      若 30 秒未恢复，自动负荷控制（ALC）介入。
