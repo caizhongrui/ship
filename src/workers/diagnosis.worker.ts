@@ -25,6 +25,17 @@ interface Rule {
   evidence: (s: EngineState) => string[]; // 命中证据
 }
 
+/** 检测排温过高：返回证据字符串或 null */
+function exhaustEvidence(s: EngineState): string | null {
+  const overCyls: number[] = [];
+  s.cylExhaust.forEach((v, i) => {
+    if (v > 430) overCyls.push(i + 1);
+  });
+  if (overCyls.length === 0) return null;
+  const max = Math.max(...s.cylExhaust);
+  return `${overCyls.map(n => n + '#').join('/')} 缸排温超 430℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
+}
+
 // 来自文档：中间轴承温度过高（>75℃）故障原因与触发条件
 const BEARING_RULES: Rule[] = [
   {
@@ -35,11 +46,14 @@ const BEARING_RULES: Rule[] = [
     scenario: '航程中滑油滤器压差突增＞0.3 bar',
     priority: 100,
     test: s => s.bearingTemp > 75,
-    evidence: s => [
-      `中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`,
-      `触发条件：滑油污染 / 流量不足（水分>800 ppm 或流量<180 L/min）`,
-      `典型场景：航程中滑油滤器压差突增>0.3 bar`
-    ]
+    evidence: s => {
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const eh = exhaustEvidence(s);
+      if (eh) ev.push(eh);
+      ev.push(`触发条件：滑油污染 / 流量不足（水分>800 ppm 或流量<180 L/min）`);
+      ev.push(`典型场景：航程中滑油滤器压差突增>0.3 bar`);
+      return ev;
+    }
   },
   {
     id: 'B-对中偏差',
@@ -49,11 +63,14 @@ const BEARING_RULES: Rule[] = [
     scenario: '船舶搁浅后复航 + 机舱异响',
     priority: 95,
     test: s => s.bearingTemp > 75,
-    evidence: s => [
-      `中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`,
-      `触发条件：热态偏移超标（径向>0.08 mm 或轴向>0.05 mm）`,
-      `典型场景：船舶搁浅后复航 + 机舱异响`
-    ]
+    evidence: s => {
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const eh = exhaustEvidence(s);
+      if (eh) ev.push(eh);
+      ev.push(`触发条件：热态偏移超标（径向>0.08 mm 或轴向>0.05 mm）`);
+      ev.push(`典型场景：船舶搁浅后复航 + 机舱异响`);
+      return ev;
+    }
   },
   {
     id: 'B-轴承本体损伤',
@@ -63,11 +80,14 @@ const BEARING_RULES: Rule[] = [
     scenario: '长期过负荷运行（＞100% MCR）',
     priority: 90,
     test: s => s.bearingTemp > 75,
-    evidence: s => [
-      `中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`,
-      `触发条件：巴氏合金层剥落（间隙>0.30 mm，标准 0.20-0.25 mm）`,
-      `典型场景：长期过负荷运行（>100% MCR）`
-    ]
+    evidence: s => {
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const eh = exhaustEvidence(s);
+      if (eh) ev.push(eh);
+      ev.push(`触发条件：巴氏合金层剥落（间隙>0.30 mm，标准 0.20-0.25 mm）`);
+      ev.push(`典型场景：长期过负荷运行（>100% MCR）`);
+      return ev;
+    }
   },
   {
     id: 'B-外部热传导',
@@ -75,14 +95,19 @@ const BEARING_RULES: Rule[] = [
     trigger: '毗邻高温部件',
     threshold: '环境温度＞65℃（红外测温验证）',
     scenario: '排气总管隔热层破损区域',
-    priority: 85,
+    priority: 105, // 当排温也异常时优先级抬到最高（最匹配级联场景）
     test: s => s.bearingTemp > 75 && s.exhaustManifold > 400,
-    evidence: s => [
-      `中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`,
-      `排烟总管温度 ${s.exhaustManifold.toFixed(0)}℃（>400℃ 可能影响相邻部件）`,
-      `触发条件：毗邻高温部件（环境温度>65℃ 需红外测温验证）`,
-      `典型场景：排气总管隔热层破损区域`
-    ]
+    evidence: s => {
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const eh = exhaustEvidence(s);
+      if (eh) ev.push(eh);
+      ev.push(
+        `排烟总管温度 ${s.exhaustManifold.toFixed(0)}℃（>400℃ 持续高温加速相邻部件升温）`
+      );
+      ev.push(`触发条件：毗邻高温部件（环境温度>65℃ 需红外测温验证）`);
+      ev.push(`典型场景：排气总管隔热层破损区域`);
+      return ev;
+    }
   }
 ];
 
