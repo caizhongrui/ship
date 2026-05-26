@@ -143,8 +143,11 @@ const trendSeries = computed(() => [
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 .anno.mb-temp.fault {
-  color: #ffeb3b; /* 故障时亮黄色更显眼，配合蓝底 */
-  text-shadow: 0 0 8px rgba(255, 60, 60, 0.9), 0 1px 2px rgba(0, 0, 0, 0.6);
+  color: #ff3030; /* 超过 75℃ 用红色显示 */
+  text-shadow:
+    0 0 10px rgba(255, 60, 60, 0.95),
+    0 0 4px rgba(255, 255, 255, 0.8),
+    0 1px 2px rgba(0, 0, 0, 0.7);
   animation: pulseAnno 1.2s infinite;
 }
 @keyframes pulseAnno {

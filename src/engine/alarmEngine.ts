@@ -16,8 +16,10 @@ interface Rule {
 }
 
 /**
- * 报警规则库（按客户要求，当前阶段只保留"排温过高"一类故障，
- * 其他超速 / 超功率 / 扫气压力 / 轴承等暂时不启用）
+ * 报警规则库（当前阶段启用两类报警）：
+ *   - 单缸排温超限（排气域）
+ *   - 中间轴承温度过高（轴系域）
+ * 其他超速 / 超功率 / 扫气压力等暂时不启用，等需要时打开
  */
 const RULES: Rule[] = [
   {
@@ -30,6 +32,18 @@ const RULES: Rule[] = [
     read: s => ({
       tag: 'engine.cyl.*.exhaust_temp',
       value: Math.max(...s.cylExhaust)
+    })
+  },
+  {
+    id: 'A_BEARING_TEMP_HIGH',
+    level: 3,
+    msg: '中间轴承温度过高 (>75℃)',
+    threshold: 75,
+    holdSec: 5,
+    test: s => s.bearingTemp > 75,
+    read: s => ({
+      tag: 'shaft.bearing.intermediate.temp',
+      value: s.bearingTemp
     })
   }
 ];

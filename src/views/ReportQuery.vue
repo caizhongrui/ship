@@ -373,17 +373,29 @@ async function onExportExcel() {
   }
 
   const buf = await wb.xlsx.writeBuffer();
-  const blob = new Blob([buf as ArrayBuffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `船舶数字孪生诊断分析报告_${form.shipName || form.diagDate}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const filename = `船舶数字孪生诊断分析报告_${form.shipName || form.diagDate || Date.now()}.xlsx`;
+
+  // Tauri 环境：写到 Downloads 目录；浏览器环境：传统 a download 下载
+  try {
+    const { writeFile, BaseDirectory } = await import('@tauri-apps/plugin-fs');
+    await writeFile(filename, new Uint8Array(buf as ArrayBuffer), {
+      baseDir: BaseDirectory.Download
+    });
+    ElMessage.success(`已导出到下载目录：${filename}`);
+  } catch (e) {
+    const blob = new Blob([buf as ArrayBuffer], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    ElMessage.success(`已导出 ${filename}`);
+  }
 }
 </script>
 

@@ -72,14 +72,17 @@ export const useReportStore = defineStore('report', () => {
     }
   }
 
+  function nowLocal(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+
   async function save(payload: Omit<ReportRecord, 'id' | 'savedAt'>) {
     const rec: ReportRecord = {
       ...payload,
       id: `R${Date.now()}`,
-      savedAt: new Date()
-        .toISOString()
-        .replace('T', ' ')
-        .slice(0, 19)
+      savedAt: nowLocal()
     };
     records.value.unshift(rec);
     await persist();
@@ -90,10 +93,7 @@ export const useReportStore = defineStore('report', () => {
     const rec = records.value.find(r => r.id === id);
     if (!rec) return;
     rec.form = { ...form };
-    rec.savedAt = new Date()
-      .toISOString()
-      .replace('T', ' ')
-      .slice(0, 19);
+    rec.savedAt = nowLocal();
     await persist();
   }
 

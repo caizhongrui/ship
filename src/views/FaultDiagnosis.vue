@@ -18,9 +18,6 @@
           >
             故 障 修 复
           </button>
-          <button class="big-btn ghost" :disabled="!candidates.length" @click="onExport">
-            导 出 报 告
-          </button>
           <span class="hint" :class="{ 'is-blocked': session.running }">
             {{ session.running ? '⚠ 请先点击侧栏"停止"按钮再进行诊断' : '基于规则库 IF-THEN 正向推理' }}
           </span>
@@ -70,8 +67,13 @@
             <ul class="evidence">
               <li v-for="(e, i) in active.evidence" :key="i">{{ e }}</li>
             </ul>
-            <h4>维修建议</h4>
-            <pre class="advice">{{ active.advice }}</pre>
+            <h4>
+              <span class="ai-tag">AI</span> 维修建议
+              <span v-if="typing" class="thinking-dots">
+                <span></span><span></span><span></span>
+              </span>
+            </h4>
+            <pre class="advice">{{ typedAdvice }}<span v-if="typing" class="caret">▊</span></pre>
           </template>
           <div v-else class="empty">请在左侧选择候选故障</div>
         </div>
@@ -81,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useDiagnosisStore } from '@/stores/diagnosis';
@@ -97,8 +99,63 @@ const alarms = useAlarmStore();
 const reportStore = useReportStore();
 const activeIdx = ref(0);
 
+// === AI 打字机效果：每条候选故障"首次查看"时流式展示，再次查看直接显示 ===
+const typedAdvice = ref('');
+const typing = ref(false);
+let typeTimer: number | null = null;
+const seenTraces = new Set<string>(); // 已经动画展示过的故障 traceId
+
+function startTyping(text: string) {
+  if (typeTimer) clearInterval(typeTimer);
+  typedAdvice.value = '';
+  typing.value = true;
+  let i = 0;
+  typeTimer = window.setInterval(() => {
+    if (i >= text.length) {
+      clearInterval(typeTimer!);
+      typeTimer = null;
+      typing.value = false;
+      return;
+    }
+    typedAdvice.value += text[i];
+    i++;
+  }, 35); // ~35ms / 字
+}
+
+function showAdvice(text: string, traceId: string) {
+  if (seenTraces.has(traceId)) {
+    // 这条故障之前已动画过 → 直接整段显示
+    if (typeTimer) clearInterval(typeTimer);
+    typeTimer = null;
+    typedAdvice.value = text;
+    typing.value = false;
+  } else {
+    // 首次查看 → 流式打字 + 记录
+    startTyping(text);
+    seenTraces.add(traceId);
+  }
+}
+
+onUnmounted(() => {
+  if (typeTimer) clearInterval(typeTimer);
+});
+
 const candidates = computed(() => d.latest?.candidates ?? []);
 const active = computed(() => candidates.value[activeIdx.value]);
+
+// 切换候选故障时刷新建议（每条故障首次查看动画，再次查看直接展示）
+watch(
+  () => active.value,
+  cand => {
+    if (!cand?.advice) {
+      typedAdvice.value = '';
+      typing.value = false;
+      return;
+    }
+    showAdvice(cand.advice, cand.trace || cand.fault);
+  },
+  { immediate: true }
+);
 
 const maxCylTemp = computed(() =>
   t.state.cylExhaust.length ? Math.max(...t.state.cylExhaust) : 0
@@ -115,8 +172,9 @@ function onAnalyze() {
 }
 
 async function onRepair() {
-  // === 1. 先用当前故障数据自动生成诊断报告（保存进 reportStore）===
-  const s = t.state;
+  // === 1. 根据用户选中的候选故障自动生成诊断报告 ===
+  const selected = active.value ?? d.latest?.candidates?.[0];
+
   const symptom = alarms.history
     .slice(-5)
     .map(
@@ -125,19 +183,16 @@ async function onRepair() {
     )
     .join('\n');
 
+  // 故障原因分析 = 选中候选的"故障名 + 证据 + 处置建议"
   let cause = '';
-  if (d.latest?.candidates.length) {
-    const top = d.latest.candidates[0];
+  if (selected) {
     cause =
-      `${top.fault}（置信度 ${(top.probability * 100).toFixed(0)}%）\n` +
-      `证据：\n  • ${top.evidence.join('\n  • ')}`;
+      `故障类型：${selected.fault}（置信度 ${(selected.probability * 100).toFixed(0)}%）\n\n` +
+      `命中证据：\n  • ${selected.evidence.join('\n  • ')}\n\n` +
+      `处置建议：\n${selected.advice}`;
   }
 
-  // 故障前最大缸温（5#）
-  const maxCyl = Math.max(...s.cylExhaust);
-  const maxCylIdx = s.cylExhaust.indexOf(maxCyl) + 1;
-
-  // 修复后期望（脚本 NAV FULL 稳态值）
+  // 修复后数据值（脚本 NAV FULL 稳态值）
   const repairedData =
     `主机转速：80.0 rpm\n` +
     `主机负荷：100.0 %\n` +
@@ -147,7 +202,10 @@ async function onRepair() {
     `各缸排温（已恢复正常）：380.0 / 378.0 / 377.0 / 382.0 / 381.0 / 379.0 / 383.0 / 378.0 ℃\n` +
     `中间轴承温度：55.0 ℃`;
 
-  const conclusion = `已识别 ${maxCylIdx}# 缸排温超限故障（峰值 ${maxCyl.toFixed(1)}℃，超过 430℃ 报警阈值）。\n经诊断系统分析与现场处置，故障已修复，主机各项参数恢复至额定运行范围。`;
+  const faultName = selected?.fault || '相关故障';
+  const conclusion =
+    `经诊断系统识别为「${faultName}」。\n` +
+    `按建议进行现场处置后，故障已清除，主机各项参数恢复至额定运行范围。`;
 
   await reportStore.load();
   await reportStore.save({
@@ -179,45 +237,6 @@ async function onRepair() {
   ElMessage.success('故障已修复，诊断报告已自动保存到"报表查询"页');
 }
 
-/**
- * 导出诊断报告（JSON 文件，浏览器内置下载）
- * 由于纯本地，无需后端接口
- */
-function onExport() {
-  const report = {
-    generatedAt: new Date().toISOString(),
-    sessionId: session.id,
-    user: session.user,
-    scenario: session.scenario,
-    simTime: t.state.t,
-    snapshot: {
-      rpm: t.state.rpm,
-      loadPct: t.state.loadPct,
-      power: t.state.power,
-      exhaustManifold: t.state.exhaustManifold,
-      maxCylTemp: maxCylTemp.value,
-      bearingTemp: t.state.bearingTemp,
-      scavPressure: t.state.scavPressure,
-      lubeOilPressure: t.state.lubeOilPressure,
-      cylExhaust: t.state.cylExhaust.slice()
-    },
-    diagnosis: d.latest,
-    activeFaults: Object.entries(t.state.faults || {})
-      .filter(([, v]: any) => v?.active)
-      .map(([k, v]) => ({ name: k, params: v }))
-  };
-  const blob = new Blob([JSON.stringify(report, null, 2)], {
-    type: 'application/json;charset=utf-8'
-  });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `diagnosis_${session.id || 'report'}_${Date.now()}.json`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 </script>
 
 <style scoped>
@@ -383,5 +402,65 @@ h4 {
   font-size: 13px;
   line-height: 1.7;
   margin: 0;
+  min-height: 70px;
+}
+
+/* AI 标签 */
+.ai-tag {
+  display: inline-block;
+  background: linear-gradient(135deg, #4a4660, var(--c-accent));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 8px;
+  letter-spacing: 1px;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+
+/* 思考中的三点 */
+.thinking-dots {
+  display: inline-flex;
+  gap: 3px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+.thinking-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  animation: tdots 1.2s infinite ease-in-out;
+}
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+@keyframes tdots {
+  0%, 60%, 100% {
+    opacity: 0.2;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+/* 打字光标 */
+.caret {
+  display: inline-block;
+  color: var(--c-accent);
+  margin-left: 1px;
+  animation: blink 0.9s steps(2, start) infinite;
+  font-weight: 700;
+}
+@keyframes blink {
+  to {
+    opacity: 0;
+  }
 }
 </style>

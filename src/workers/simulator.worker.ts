@@ -68,6 +68,12 @@ let lastPostMs = 0;
 let exhaustFaultDelta = 0;
 const FAULT_RAMP_TAU = 3; // 时间常数（秒）。约 3 秒后达 63%，10 秒后基本到位
 
+// 故障级联：排温报警发出后 1 秒，触发中间轴承超温至 79℃
+let cylAlarmFiredAt = -1; // 仿真时间（秒），<0 表示未触发
+let bearingFaultActive = false;
+const BEARING_FAULT_TARGET = 79; // ℃
+const BEARING_FAULT_TAU = 1.2; // 约 1-2 秒升到位
+
 function jitter(amp: number) {
   return (Math.random() - 0.5) * amp;
 }
@@ -177,9 +183,16 @@ function tick() {
   // 用基线 + 故障渐变 + 噪声 合成最终排温（每 tick 重算，不累积）
   composeExhaust(dt);
 
-  // 其他物理
-  stepBearingTemp(state, dt);
+  // ===== 中间轴承温度 =====
+  if (bearingFaultActive) {
+    // 故障级联：快速逼近 79℃
+    state.bearingTemp +=
+      ((BEARING_FAULT_TARGET - state.bearingTemp) / BEARING_FAULT_TAU) * dt;
+  } else {
+    stepBearingTemp(state, dt);
+  }
   state.bearingTemp += jitter(0.05);
+
   for (let i = 0; i < 8; i++) {
     state.cylPmax[i] = (state.loadPct / 100) * 195 + jitter(1.5);
   }
@@ -195,6 +208,15 @@ function tick() {
   }
 
   const alarms = alarmEngine.check(state, dt);
+
+  // ===== 故障级联：A_CYL_EXH_HIGH 报警发出后 1 秒，触发轴承超温 =====
+  if (cylAlarmFiredAt < 0) {
+    if (alarms.some(a => a.id === 'A_CYL_EXH_HIGH')) {
+      cylAlarmFiredAt = state.t;
+    }
+  } else if (!bearingFaultActive && state.t - cylAlarmFiredAt >= 1) {
+    bearingFaultActive = true;
+  }
 
   const nowMs = performance.now();
   const shouldPost = nowMs - lastPostMs >= UI_POST_MS || alarms.length > 0;
@@ -269,6 +291,8 @@ self.onmessage = (e: MessageEvent) => {
       baseExhaustManifold = 25;
       cylAccum = elecAccum = scavAccum = 0;
       exhaustFaultDelta = 0;
+      cylAlarmFiredAt = -1;
+      bearingFaultActive = false;
       scriptMode = true;
       alarmEngine.reset();
       faultInjector.reset();
@@ -295,11 +319,14 @@ self.onmessage = (e: MessageEvent) => {
       faultInjector.clear(state);
       alarmEngine.reset();
       exhaustFaultDelta = 0;
+      cylAlarmFiredAt = -1;
+      bearingFaultActive = false;
       state.t = 0;
       state.rpm = 0;
       state.rpmTarget = 0;
       state.loadPct = 0;
       state.power = 0;
+      state.bearingTemp = 55; // 修复后回到正常负荷温度
       state.telegraph = 'STOP';
       baseCylExhaust = Array(8).fill(25);
       baseExhaustManifold = 25;

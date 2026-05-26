@@ -42,16 +42,16 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/TrendQuery.vue')
   },
   {
-    path: '/report',
-    name: 'report',
-    meta: { title: '报表查询', icon: 'report' },
-    component: () => import('@/views/ReportQuery.vue')
-  },
-  {
     path: '/diag',
     name: 'diag',
     meta: { title: '故障诊断', icon: 'diag', highlight: true },
     component: () => import('@/views/FaultDiagnosis.vue')
+  },
+  {
+    path: '/report',
+    name: 'report',
+    meta: { title: '报告查询', icon: 'report' },
+    component: () => import('@/views/ReportQuery.vue')
   }
 ];
 
