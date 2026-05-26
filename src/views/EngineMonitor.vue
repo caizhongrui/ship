@@ -1,7 +1,5 @@
 <template>
   <div class="engine-monitor page">
-    <AlarmBanner />
-
     <div class="grid">
       <!-- 左列：5 个子系统状态卡 -->
       <div class="col col-left">
@@ -82,7 +80,6 @@ import { computed } from 'vue';
 import CircleGauge from '@/components/industrial/CircleGauge.vue';
 import StatusCard, { type StatusItem } from '@/components/industrial/StatusCard.vue';
 import BarChart8Cyl from '@/components/industrial/BarChart8Cyl.vue';
-import AlarmBanner from '@/components/industrial/AlarmBanner.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();

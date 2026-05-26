@@ -40,7 +40,9 @@ function buildOption() {
       trigger: 'axis',
       backgroundColor: '#fff',
       borderColor: '#5e5b78',
-      textStyle: { color: '#1f1e33' }
+      textStyle: { color: '#1f1e33' },
+      valueFormatter: (v: number | string) =>
+        typeof v === 'number' ? v.toFixed(2) : String(v)
     },
     xAxis: {
       type: 'value',
