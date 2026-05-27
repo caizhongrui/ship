@@ -70,6 +70,21 @@ npm run tauri:build
 
 所有参数与曲线遵循 04.24 数据交底文档 + 04.30 启动数据表，详见 `src-tauri/resources/default-config/`。
 
+## AI 推理模型
+
+安装包内置 `all-MiniLM-L6-v2` ONNX 模型（~90MB），位于 `resources/models/embedding-model.onnx`。当前版本保留接口，**未启用运行时推理**；后续可用于：
+
+- 故障描述与历史案例的相似度匹配
+- 报警语义聚类
+- 维修建议检索增强
+
+模型文件由 CI 构建时从 Hugging Face 下载（仓库本身不存模型），开发本地构建若需打入安装包，可执行：
+
+```bash
+curl -L -o src-tauri/resources/models/embedding-model.onnx \
+  https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx
+```
+
 ## 许可
 
 私有项目，未经授权请勿分发。

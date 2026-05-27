@@ -31,6 +31,24 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
+      # === AI 推理模型（all-MiniLM-L6-v2 ONNX，~90MB），打入安装包 ===
+      - name: Cache AI inference model
+        id: model-cache
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/resources/models
+          key: ai-model-all-MiniLM-L6-v2-onnx-v1
+
+      - name: Download AI inference model
+        if: steps.model-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/resources/models
+          curl -L --fail --retry 3 \
+            -o src-tauri/resources/models/embedding-model.onnx \
+            "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx"
+          ls -lh src-tauri/resources/models/
+
       - name: Install npm dependencies
         run: npm ci
 

@@ -12,6 +12,12 @@ src-tauri/target
 src-tauri/gen
 # Cargo.lock 二进制项目应该提交，便于 CI 复现构建
 
+# AI 推理模型（CI 构建时下载，不进 git）
+src-tauri/resources/models/*.onnx
+src-tauri/resources/models/*.bin
+src-tauri/resources/models/*.gguf
+src-tauri/resources/models/*.safetensors
+
 # OS
 .DS_Store
 Thumbs.db

@@ -1,0 +1,3 @@
+AI inference model directory.
+The actual model is downloaded by GitHub Actions during CI build (see .github/workflows/release.yml).
+The model file is intentionally ignored by .gitignore to keep the repo small.
