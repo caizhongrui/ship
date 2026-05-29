@@ -11,7 +11,7 @@ export const TARGET_RPM: Record<TelegraphPosition, number> = {
   DEAD_SLOW_AHEAD: 25,
   SLOW_AHEAD: 38,
   HALF_AHEAD: 52,
-  FULL_AHEAD: 63,
+  FULL_AHEAD: 78,
   NAV_FULL: 80
 };
 

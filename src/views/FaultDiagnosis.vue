@@ -57,7 +57,7 @@
                 未检测到故障<br />
                 <span class="ev-detail">
                   最高缸温 <b class="num">{{ snapshot.maxCyl.toFixed(1) }}</b>℃
-                  ＜ 430℃ &nbsp;|&nbsp;
+                  ＜ 390℃ &nbsp;|&nbsp;
                   轴承温度 <b class="num">{{ snapshot.bearingTemp.toFixed(1) }}</b>℃
                   ＜ 75℃
                 </span>
@@ -68,13 +68,13 @@
             <div v-if="snapshot.cylOver" class="ev-card cyl">
               <div class="ev-head">
                 <span class="ev-tag">L3</span>
-                <span class="ev-name">单缸排温超限</span>
+                <span class="ev-name">各缸排温过高</span>
               </div>
               <div class="ev-value">
-                5# 缸排温超 430℃<br />
+                各缸排温超 390℃<br />
                 <span class="ev-detail">
                   当前最高 <b class="num">{{ snapshot.maxCyl.toFixed(1) }}</b>℃（超阈值
-                  <b class="num">{{ (snapshot.maxCyl - 430).toFixed(1) }}</b>℃）
+                  <b class="num">{{ (snapshot.maxCyl - 390).toFixed(1) }}</b>℃）
                 </span>
               </div>
             </div>
@@ -130,7 +130,7 @@ import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
 import { useAlarmStore } from '@/stores/alarms';
 import { useReportStore } from '@/stores/report';
-import { simClearFault } from '@/engine/simRuntime';
+import { simClearFault, simSetMode } from '@/engine/simRuntime';
 
 const t = useTelemetryStore();
 const session = useSessionStore();
@@ -157,7 +157,7 @@ const ADVICE_BEARING_ONLY = `中间轴承温度超温，极大可能原因为中
 
 const ADVICE_NORMAL = `经多维参数综合分析，当前主机运行正常，未发现任何异常工况：
 
-  • 各缸排气温度均在正常范围（最高 < 430℃ 报警阈值）
+  • 各缸排气温度均在正常范围（最高 < 390℃ 报警阈值）
   • 中间轴承温度正常（< 75℃ 报警阈值）
   • 主机转速、负荷、滑油压力等核心参数均稳定在额定范围内
 
@@ -225,7 +225,7 @@ function onAnalyze() {
   const pad = (n: number) => String(n).padStart(2, '0');
   const cylMax = maxCylTemp.value;
   const bt = t.state.bearingTemp;
-  const cylOver = cylMax > 430;
+  const cylOver = cylMax > 390;
   const bearingOver = bt > 75;
 
   snapshot.value = {
@@ -264,7 +264,7 @@ async function onRepair() {
   if (snap) {
     if (snap.cylOver) {
       evParts.push(
-        `• 5# 缸排温超 430℃（最高 ${snap.maxCyl.toFixed(1)}℃，超阈值 ${(snap.maxCyl - 430).toFixed(1)}℃）`
+        `• 各缸排温超 390℃（最高 ${snap.maxCyl.toFixed(1)}℃，超阈值 ${(snap.maxCyl - 390).toFixed(1)}℃）`
       );
     }
     if (snap.bearingOver) {
@@ -291,7 +291,7 @@ async function onRepair() {
     `各缸排温（已恢复正常）：380.0 / 378.0 / 377.0 / 382.0 / 381.0 / 379.0 / 383.0 / 378.0 ℃\n` +
     `中间轴承温度：55.0 ℃`;
 
-  const conclusion = `经诊断系统识别为「5# 缸排温过高 + 中间轴承温度过高」联动故障。\n按 AI 建议进行现场处置后，故障已清除，主机各项参数恢复至额定运行范围。`;
+  const conclusion = `经诊断系统识别为「各缸排温过高 + 中间轴承温度过高」联动故障。\n按 AI 建议进行现场处置后，故障已清除，主机各项参数恢复至额定运行范围。`;
 
   await reportStore.load();
   await reportStore.save({
@@ -315,8 +315,9 @@ async function onRepair() {
     }
   });
 
-  // 清除故障（软重放）
+  // 清除故障（软重放）+ 重新同步模式（自动降速曾关掉剧本，AUTO 下需重放）
   simClearFault();
+  simSetMode(session.mode);
   alarms.active.splice(0);
   snapshot.value = null;
   typedAdvice.value = '';

@@ -115,7 +115,7 @@ const positions: Pos[] = [
   { code: 'DEAD_SLOW_AHEAD', name: 'DEAD SLOW', en: 'DEAD SLOW AHEAD', rpm: 25 },
   { code: 'SLOW_AHEAD', name: 'SLOW', en: 'SLOW AHEAD', rpm: 38 },
   { code: 'HALF_AHEAD', name: 'HALF', en: 'HALF AHEAD', rpm: 52 },
-  { code: 'FULL_AHEAD', name: 'FULL', en: 'FULL AHEAD', rpm: 63 },
+  { code: 'FULL_AHEAD', name: 'FULL', en: 'FULL AHEAD', rpm: 78 },
   { code: 'NAV_FULL', name: 'NAV FULL', en: 'NAV FULL AHEAD', rpm: 80 }
 ];
 

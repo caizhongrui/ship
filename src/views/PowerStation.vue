@@ -131,15 +131,15 @@ const safetyItems = computed<StatusItem[]>(() => [
 ]);
 
 function aeRunning(i: number) {
-  // 简化：1 号始终运行，2/3 备用
-  if (i === 1) return true;
-  return false;
+  // 系泊试验：1、2 号发电机并联运行，3 号备用
+  return i === 1 || i === 2;
 }
 function aeVolt(i: number) {
   return aeRunning(i) ? t.state.busVoltage.toFixed(0) : '0';
 }
 function aeCurr(i: number) {
-  return aeRunning(i) ? t.state.busCurrent.toFixed(0) : '0';
+  // 两台并联，单台电流约为总电流的一半
+  return aeRunning(i) ? (t.state.busCurrent / 2).toFixed(0) : '0';
 }
 function aeFreq(i: number) {
   return aeRunning(i) ? t.state.busFrequency.toFixed(2) : '0';

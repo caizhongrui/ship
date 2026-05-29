@@ -2,6 +2,22 @@
   <LoginView v-if="!session.authenticated" />
   <div v-else class="app-shell">
     <AppHeader />
+
+    <!-- 全局报警横幅（所有页面可见，红色闪烁） -->
+    <transition name="ga-slide">
+      <div
+        v-if="activeAlarm"
+        class="global-alarm"
+        @click="ackAll"
+      >
+        <span class="ga-icon">⚠</span>
+        <span class="ga-level">报警 L{{ activeAlarm.level }}</span>
+        <span class="ga-text">{{ activeAlarm.message }}</span>
+        <span class="ga-meta num">{{ activeAlarm.tag }} = {{ activeAlarm.value }}</span>
+        <span class="ga-ack">点击确认 ✕</span>
+      </div>
+    </transition>
+
     <div class="app-body">
       <AppSidebar />
       <main class="app-main">
@@ -15,12 +31,14 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue';
+import { watch, computed } from 'vue';
 import AppHeader from '@/layouts/AppHeader.vue';
 import AppSidebar from '@/layouts/AppSidebar.vue';
 import AppStatusBar from '@/layouts/AppStatusBar.vue';
 import LoginView from '@/views/LoginView.vue';
 import { useSessionStore } from '@/stores/session';
+import { useAlarmStore } from '@/stores/alarms';
+import { playAlarmBeep } from '@/utils/alarmSound';
 import {
   bootSimRuntime,
   simSetTimeScale,
@@ -28,6 +46,24 @@ import {
 } from '@/engine/simRuntime';
 
 const session = useSessionStore();
+const alarms = useAlarmStore();
+
+// 最新一条未确认的活跃报警（驱动全局横幅）
+const activeAlarm = computed(
+  () => [...alarms.active].reverse().find(a => !a.acknowledged) || null
+);
+
+function ackAll() {
+  alarms.active.forEach(a => (a.acknowledged = true));
+}
+
+// 新报警触发音效
+watch(
+  () => alarms.history.length,
+  (n, old) => {
+    if (n > old) playAlarmBeep(3);
+  }
+);
 
 // 登录后才初始化仿真运行时
 watch(
@@ -72,5 +108,68 @@ watch(
   min-height: 0;
   overflow: auto;
   background: var(--c-bg);
+}
+
+/* === 全局报警横幅 === */
+.global-alarm {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 20px;
+  background: var(--c-accent);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-bottom: 2px solid #fff;
+  animation: ga-flash 0.9s steps(1) infinite;
+  z-index: 50;
+}
+.ga-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+.ga-level {
+  background: #fff;
+  color: var(--c-accent);
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 13px;
+}
+.ga-text {
+  flex-shrink: 0;
+}
+.ga-meta {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.92;
+}
+.ga-ack {
+  font-size: 12px;
+  font-weight: 400;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  padding: 3px 10px;
+  border-radius: 3px;
+}
+@keyframes ga-flash {
+  0%,
+  100% {
+    background: var(--c-accent);
+  }
+  50% {
+    background: #8a1f1f;
+  }
+}
+.ga-slide-enter-active,
+.ga-slide-leave-active {
+  transition: all 0.25s ease;
+}
+.ga-slide-enter-from,
+.ga-slide-leave-to {
+  transform: translateY(-100%);
+  opacity: 0;
 }
 </style>

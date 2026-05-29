@@ -64,13 +64,14 @@ let elecAccum = 0;
 let scavAccum = 0;
 let lastPostMs = 0;
 
-// 故障渐变：5# 缸排温叠加量（℃）—— 一阶滞后逼近目标 delta，让故障"慢慢冒头"
-let exhaustFaultDelta = 0;
-const FAULT_RAMP_TAU = 3; // 时间常数（秒）。约 3 秒后达 63%，10 秒后基本到位
+// 故障渐变：各缸排温向目标值过渡的进度 0..1（一阶滞后）
+let exhaustFaultProgress = 0;
+const FAULT_RAMP_TAU = 3; // 时间常数（秒）
 
 // 故障级联：排温报警发出后 1 秒，触发中间轴承超温至 79℃
 let cylAlarmFiredAt = -1; // 仿真时间（秒），<0 表示未触发
 let bearingFaultActive = false;
+let autoSlowedDown = false; // 报警后是否已自动降速
 const BEARING_FAULT_TARGET = 79; // ℃
 const BEARING_FAULT_TAU = 1.2; // 约 1-2 秒升到位
 
@@ -109,21 +110,23 @@ function applyScriptedValues() {
 function composeExhaust(dt: number) {
   const exhFault = state.faults['EXHAUST_TEMP_HIGH'];
   const faultActive = !!exhFault?.active;
-  const faultCyl = faultActive ? ((exhFault as any).targetCyl ?? 4) : -1;
-  const faultTemp = faultActive ? ((exhFault as any).targetTemp ?? 435) : 0;
+  const targets: number[] | null = faultActive
+    ? ((exhFault as any).targets ?? null)
+    : null;
 
-  // 一阶滞后让故障渐变出现（也让"修复"后回归更柔和）
-  const deltaTarget =
-    faultActive && faultCyl >= 0
-      ? faultTemp - baseCylExhaust[faultCyl]
-      : 0;
-  exhaustFaultDelta += ((deltaTarget - exhaustFaultDelta) / FAULT_RAMP_TAU) * dt;
+  // 故障进度 0->1 一阶滞后（8 缸一起慢慢升到各自目标值）
+  const progressTarget = faultActive ? 1 : 0;
+  exhaustFaultProgress +=
+    ((progressTarget - exhaustFaultProgress) / FAULT_RAMP_TAU) * dt;
 
   for (let i = 0; i < 8; i++) {
-    if (faultActive && i === faultCyl) {
-      state.cylExhaust[i] = baseCylExhaust[i] + exhaustFaultDelta + jitter(2.5);
+    const normalVal = baseCylExhaust[i];
+    if (targets) {
+      const faultVal = targets[i];
+      state.cylExhaust[i] =
+        normalVal + (faultVal - normalVal) * exhaustFaultProgress + jitter(0.6);
     } else {
-      state.cylExhaust[i] = baseCylExhaust[i] + jitter(0.5);
+      state.cylExhaust[i] = normalVal + jitter(0.5);
     }
   }
   const avg = state.cylExhaust.reduce((s, v) => s + v, 0) / 8;
@@ -177,8 +180,18 @@ function tick() {
 
   applyOtherJitter();
 
-  // 故障注入（决定 dC 是否生效）
+  // 故障注入（转速达 68 rpm 触发）
   faultInjector.step(state);
+
+  // ===== 故障保持阶段：报警前锁定"68转 + 100%负荷过载"场景 =====
+  const exhFaultActive = !!state.faults['EXHAUST_TEMP_HIGH']?.active;
+  if (exhFaultActive && !autoSlowedDown) {
+    scriptMode = false; // 停止剧本爬升
+    state.rpm = 68 + jitter(0.3); // 转速锁在海速 85%（68 转）
+    state.rpmTarget = 68;
+    state.loadPct = 100 + jitter(0.3); // 负荷异常拉到 100%（过载）
+    state.power = 42310 + jitter(80);
+  }
 
   // 用基线 + 故障渐变 + 噪声 合成最终排温（每 tick 重算，不累积）
   composeExhaust(dt);
@@ -192,6 +205,11 @@ function tick() {
     stepBearingTemp(state, dt);
   }
   state.bearingTemp += jitter(0.05);
+
+  // ===== 滑油温度：轴承超温时随之明显上升至 71℃ =====
+  if (bearingFaultActive) {
+    state.lubeOilTemp += ((71 - state.lubeOilTemp) / 3) * dt + jitter(0.05);
+  }
 
   for (let i = 0; i < 8; i++) {
     state.cylPmax[i] = (state.loadPct / 100) * 195 + jitter(1.5);
@@ -209,12 +227,19 @@ function tick() {
 
   const alarms = alarmEngine.check(state, dt);
 
-  // ===== 故障级联：A_CYL_EXH_HIGH 报警发出后 1 秒，触发轴承超温 =====
+  // ===== 故障级联 =====
   if (cylAlarmFiredAt < 0) {
     if (alarms.some(a => a.id === 'A_CYL_EXH_HIGH')) {
       cylAlarmFiredAt = state.t;
+      // 排温报警 → 系统自动降速至 SLOW（退出剧本，进入物理仿真）
+      if (!autoSlowedDown) {
+        autoSlowedDown = true;
+        scriptMode = false;
+        state.telegraph = 'SLOW_AHEAD';
+      }
     }
   } else if (!bearingFaultActive && state.t - cylAlarmFiredAt >= 1) {
+    // 报警 1 秒后触发中间轴承超温
     bearingFaultActive = true;
   }
 
@@ -290,9 +315,10 @@ self.onmessage = (e: MessageEvent) => {
       baseCylExhaust = Array(8).fill(25);
       baseExhaustManifold = 25;
       cylAccum = elecAccum = scavAccum = 0;
-      exhaustFaultDelta = 0;
+      exhaustFaultProgress = 0;
       cylAlarmFiredAt = -1;
       bearingFaultActive = false;
+      autoSlowedDown = false;
       scriptMode = true;
       alarmEngine.reset();
       faultInjector.reset();
@@ -318,15 +344,17 @@ self.onmessage = (e: MessageEvent) => {
       // - 当前 scriptMode 保持，AUTO 下会重新跑剧本（这次不会出故障）
       faultInjector.clear(state);
       alarmEngine.reset();
-      exhaustFaultDelta = 0;
+      exhaustFaultProgress = 0;
       cylAlarmFiredAt = -1;
       bearingFaultActive = false;
+      autoSlowedDown = false;
       state.t = 0;
       state.rpm = 0;
       state.rpmTarget = 0;
       state.loadPct = 0;
       state.power = 0;
       state.bearingTemp = 55; // 修复后回到正常负荷温度
+      state.lubeOilTemp = 45; // 滑油温度回正常
       state.telegraph = 'STOP';
       baseCylExhaust = Array(8).fill(25);
       baseExhaustManifold = 25;

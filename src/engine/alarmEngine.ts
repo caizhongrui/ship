@@ -25,10 +25,10 @@ const RULES: Rule[] = [
   {
     id: 'A_CYL_EXH_HIGH',
     level: 3,
-    msg: '单缸排温超限 (>430℃)',
-    threshold: 430,
+    msg: '各缸排温过高 (>390℃)',
+    threshold: 390,
     holdSec: 3,
-    test: s => s.cylExhaust.some(t => t > 430),
+    test: s => s.cylExhaust.some(t => t > 390),
     read: s => ({
       tag: 'engine.cyl.*.exhaust_temp',
       value: Math.max(...s.cylExhaust)

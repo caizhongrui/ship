@@ -29,11 +29,11 @@ interface Rule {
 function exhaustEvidence(s: EngineState): string | null {
   const overCyls: number[] = [];
   s.cylExhaust.forEach((v, i) => {
-    if (v > 430) overCyls.push(i + 1);
+    if (v > 390) overCyls.push(i + 1);
   });
   if (overCyls.length === 0) return null;
   const max = Math.max(...s.cylExhaust);
-  return `${overCyls.map(n => n + '#').join('/')} 缸排温超 430℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
+  return `${overCyls.map(n => n + '#').join('/')} 缸排温超 390℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
 }
 
 // 来自文档：中间轴承温度过高（>75℃）故障原因与触发条件
@@ -120,16 +120,16 @@ const LOAD_RULES: Rule[] = [
     threshold: '单缸爆压＞160 bar（设计值 150 bar）',
     scenario: '燃油分油机故障导致黏度＜180 cSt',
     priority: 80,
-    test: s => s.cylExhaust.some(t => t > 430),
+    test: s => s.cylExhaust.some(t => t > 390),
     evidence: s => {
       const maxT = Math.max(...s.cylExhaust);
       const overCyls: number[] = [];
       s.cylExhaust.forEach((v, i) => {
-        if (v > 430) overCyls.push(i + 1);
+        if (v > 390) overCyls.push(i + 1);
       });
       const maxP = Math.max(...s.cylPmax);
       return [
-        `${overCyls.map(n => n + '#').join('/')} 缸排温超 430℃（最高 ${maxT.toFixed(1)}℃）`,
+        `${overCyls.map(n => n + '#').join('/')} 缸排温超 390℃（最高 ${maxT.toFixed(1)}℃）`,
         `单缸爆压 ${maxP.toFixed(0)} bar${maxP > 160 ? '（超 160 bar 设计上限）' : ''}`,
         `触发条件：多缸喷油量超标`,
         `典型场景：燃油分油机故障导致黏度<180 cSt`
@@ -144,13 +144,13 @@ const LOAD_RULES: Rule[] = [
     scenario: '使用高硫油（＞2.5%S）未定期水洗',
     priority: 75,
     test: s =>
-      s.cylExhaust.some(t => t > 430) ||
+      s.cylExhaust.some(t => t > 390) ||
       (s.loadPct > 80 && s.scavPressure < 3.0),
     evidence: s => {
       const ev: string[] = [];
       const maxT = Math.max(...s.cylExhaust);
-      if (s.cylExhaust.some(t => t > 430))
-        ev.push(`最高缸排温 ${maxT.toFixed(1)}℃ 超 430℃`);
+      if (s.cylExhaust.some(t => t > 390))
+        ev.push(`最高缸排温 ${maxT.toFixed(1)}℃ 超 390℃`);
       ev.push(
         `扫气压力 ${s.scavPressure.toFixed(2)} bar @ 负荷 ${s.loadPct.toFixed(0)}%`
       );

@@ -10,8 +10,13 @@
     </span>
     <span class="seg">学员：{{ session.user }}</span>
     <span class="seg">用时：{{ session.elapsedFmt }}</span>
-    <span class="seg flex-grow">
-      <template v-if="lastAlarm">
+    <span class="seg flex-grow" :class="{ 'alarm-active': hasActiveAlarm }">
+      <template v-if="hasActiveAlarm">
+        <span class="alarm-dot blink" :class="`L${activeAlarm!.level}`"></span>
+        <span class="alarm-label">⚠ 报警 L{{ activeAlarm!.level }}</span>
+        {{ activeAlarm!.message }}
+      </template>
+      <template v-else-if="lastAlarm">
         <span class="alarm-dot" :class="`L${lastAlarm.level}`"></span>
         最新报警：{{ lastAlarm.message }}
       </template>
@@ -57,6 +62,10 @@ onUnmounted(() => t && clearInterval(t));
 const lastAlarm = computed(() =>
   alarms.history.length ? alarms.history[alarms.history.length - 1] : null
 );
+const activeAlarm = computed(
+  () => [...alarms.active].reverse().find(a => !a.acknowledged) || null
+);
+const hasActiveAlarm = computed(() => activeAlarm.value !== null);
 </script>
 
 <style scoped>
@@ -95,10 +104,38 @@ const lastAlarm = computed(() =>
   outline: none;
   font-family: var(--font-num);
 }
-.flex-grow {
-  flex: 1;
-  text-align: left;
+/* 活跃报警：整段放大 + 红底闪烁 */
+.flex-grow.alarm-active {
+  background: var(--c-accent);
   color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin: 0 -8px;
+  padding: 0 12px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: sb-flash 0.9s steps(1) infinite;
+}
+.alarm-label {
+  background: #fff;
+  color: var(--c-accent);
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.blink {
+  animation: dot-blink 0.6s steps(1) infinite;
+}
+@keyframes sb-flash {
+  0%, 100% { background: var(--c-accent); }
+  50% { background: #8a1f1f; }
+}
+@keyframes dot-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.2; }
 }
 .alarm-dot,
 .ok-dot {

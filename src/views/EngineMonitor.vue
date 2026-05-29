@@ -43,9 +43,10 @@
               label="启 动 空 气 压 力"
               :value="startAirPressure"
               :min="0"
-              :max="40"
+              :max="12"
               unit="bar"
               :size="170"
+              :digits="1"
             />
           </div>
         </div>
@@ -57,9 +58,9 @@
               :values="t.state.cylExhaust"
               :min="0"
               :max="500"
-              :warn="425"
-              :danger="450"
-              :threshold="450"
+              :warn="380"
+              :danger="390"
+              :threshold="390"
             />
           </div>
         </div>
@@ -84,10 +85,13 @@ import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();
 
-// 启动空气压力（28 bar 缓慢漂移）
-const startAirPressure = computed(
-  () => 28 - Math.sin(t.state.t * 0.05) * 0.25
-);
+// 启动空气压力：启动前正常(≈9bar)，启动后控制稳定在 7-9 bar
+const startAirPressure = computed(() => {
+  if (t.state.rpm < 5) {
+    return 9.0 + Math.sin(t.state.t * 0.1) * 0.2; // 启动前 ~9 bar
+  }
+  return 8 + Math.sin(t.state.t * 0.3) * 1; // 启动后 7-9 bar 控制带
+});
 
 // === 左列五卡 ===
 const warmItems = computed<StatusItem[]>(() => [
