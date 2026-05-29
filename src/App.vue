@@ -3,7 +3,7 @@
   <div v-else class="app-shell">
     <AppHeader />
 
-    <!-- 全局报警横幅（所有页面可见，红色闪烁） -->
+    <!-- 全局报警横幅（所有页面可见，红色闪烁；多条自动轮播） -->
     <transition name="ga-slide">
       <div
         v-if="activeAlarm"
@@ -12,9 +12,12 @@
       >
         <span class="ga-icon">⚠</span>
         <span class="ga-level">报警 L{{ activeAlarm.level }}</span>
+        <span v-if="alarms.activeUnacked.length > 1" class="ga-seq num">
+          {{ (alarms.cycleIndex % alarms.activeUnacked.length) + 1 }}/{{ alarms.activeUnacked.length }}
+        </span>
         <span class="ga-text">{{ activeAlarm.message }}</span>
         <span class="ga-meta num">{{ activeAlarm.tag }} = {{ activeAlarm.value }}</span>
-        <span class="ga-ack">点击确认 ✕</span>
+        <span class="ga-ack">点击确认全部 ✕</span>
       </div>
     </transition>
 
@@ -31,14 +34,16 @@
 </template>
 
 <script setup lang="ts">
-import { watch, computed } from 'vue';
+import { watch, computed, onMounted, onUnmounted } from 'vue';
 import AppHeader from '@/layouts/AppHeader.vue';
 import AppSidebar from '@/layouts/AppSidebar.vue';
 import AppStatusBar from '@/layouts/AppStatusBar.vue';
 import LoginView from '@/views/LoginView.vue';
 import { useSessionStore } from '@/stores/session';
 import { useAlarmStore } from '@/stores/alarms';
+import { useTelemetryStore } from '@/stores/telemetry';
 import { playAlarmBeep } from '@/utils/alarmSound';
+import { updateEngineSound, stopEngineSound } from '@/utils/engineSound';
 import {
   bootSimRuntime,
   simSetTimeScale,
@@ -47,15 +52,34 @@ import {
 
 const session = useSessionStore();
 const alarms = useAlarmStore();
+const telemetry = useTelemetryStore();
 
-// 最新一条未确认的活跃报警（驱动全局横幅）
-const activeAlarm = computed(
-  () => [...alarms.active].reverse().find(a => !a.acknowledged) || null
+// 主机运行背景音：随运行状态与转速变化
+watch(
+  () => [session.running, telemetry.state.rpm] as [boolean, number],
+  ([running, rpm]) => updateEngineSound(running, rpm)
+);
+// 退出登录时停止引擎声
+watch(
+  () => session.authenticated,
+  authed => {
+    if (!authed) stopEngineSound();
+  }
 );
 
+// 当前轮播展示的活跃报警（驱动全局横幅）
+const activeAlarm = computed(() => alarms.displayed);
+
 function ackAll() {
-  alarms.active.forEach(a => (a.acknowledged = true));
+  alarms.ackAll();
 }
+
+// 多条活跃报警轮播（每 2.5 秒切换）
+let cycleTimer: number | undefined;
+onMounted(() => {
+  cycleTimer = window.setInterval(() => alarms.cycle(), 2500);
+});
+onUnmounted(() => cycleTimer && clearInterval(cycleTimer));
 
 // 新报警触发音效
 watch(
@@ -137,6 +161,13 @@ watch(
   padding: 2px 8px;
   border-radius: 3px;
   font-size: 13px;
+}
+.ga-seq {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
 }
 .ga-text {
   flex-shrink: 0;

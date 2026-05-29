@@ -171,7 +171,10 @@ function tick() {
       cylAccum = 0;
       // stepExhaustTemp 现在写到 baseCylExhaust，不再写 state.cylExhaust
       stepExhaustTempBase(elapsed);
-      state.lubeOilTemp = 35 + (state.loadPct / 100) * 15;
+      // 轴承故障时滑油温度由故障逻辑接管（升到 71℃），物理层不覆盖
+      if (!bearingFaultActive) {
+        state.lubeOilTemp = 35 + (state.loadPct / 100) * 15;
+      }
     }
   } else {
     cylAccum += dt;

@@ -43,7 +43,7 @@
               label="启 动 空 气 压 力"
               :value="startAirPressure"
               :min="0"
-              :max="12"
+              :max="35"
               unit="bar"
               :size="170"
               :digits="1"
@@ -85,10 +85,10 @@ import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();
 
-// 启动空气压力：启动前正常(≈9bar)，启动后控制稳定在 7-9 bar
+// 启动空气压力：启动前稳定在 28.2bar（瓶压），启动后控制稳定在 7-9 bar
 const startAirPressure = computed(() => {
   if (t.state.rpm < 5) {
-    return 9.0 + Math.sin(t.state.t * 0.1) * 0.2; // 启动前 ~9 bar
+    return 28.2 + Math.sin(t.state.t * 0.1) * 0.1; // 启动前 ~28.2 bar
   }
   return 8 + Math.sin(t.state.t * 0.3) * 1; // 启动后 7-9 bar 控制带
 });

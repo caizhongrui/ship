@@ -14,6 +14,9 @@
       <template v-if="hasActiveAlarm">
         <span class="alarm-dot blink" :class="`L${activeAlarm!.level}`"></span>
         <span class="alarm-label">⚠ 报警 L{{ activeAlarm!.level }}</span>
+        <span v-if="alarms.activeUnacked.length > 1" class="alarm-seq num">
+          {{ (alarms.cycleIndex % alarms.activeUnacked.length) + 1 }}/{{ alarms.activeUnacked.length }}
+        </span>
         {{ activeAlarm!.message }}
       </template>
       <template v-else-if="lastAlarm">
@@ -62,9 +65,7 @@ onUnmounted(() => t && clearInterval(t));
 const lastAlarm = computed(() =>
   alarms.history.length ? alarms.history[alarms.history.length - 1] : null
 );
-const activeAlarm = computed(
-  () => [...alarms.active].reverse().find(a => !a.acknowledged) || null
-);
+const activeAlarm = computed(() => alarms.displayed);
 const hasActiveAlarm = computed(() => activeAlarm.value !== null);
 </script>
 
@@ -125,6 +126,12 @@ const hasActiveAlarm = computed(() => activeAlarm.value !== null);
   padding: 1px 8px;
   border-radius: 3px;
   font-size: 12px;
+}
+.alarm-seq {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 1px 7px;
+  border-radius: 9px;
+  font-size: 11px;
 }
 .blink {
   animation: dot-blink 0.6s steps(1) infinite;
