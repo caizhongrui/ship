@@ -110,16 +110,25 @@ interface Pos {
   rpm: number;
 }
 
+// 由倒车全速 → STOP → 航行全速（索引 0..9）
 const positions: Pos[] = [
+  { code: 'FULL_ASTERN', name: 'FULL ASTERN', en: 'FULL ASTERN', rpm: -75 },
+  { code: 'HALF_ASTERN', name: 'HALF ASTERN', en: 'HALF ASTERN', rpm: -52 },
+  { code: 'SLOW_ASTERN', name: 'SLOW ASTERN', en: 'SLOW ASTERN', rpm: -38 },
+  { code: 'DEAD_SLOW_ASTERN', name: 'DEAD SLOW ASTERN', en: 'DEAD SLOW ASTERN', rpm: -25 },
   { code: 'STOP', name: 'STOP', en: 'STOP', rpm: 0 },
   { code: 'DEAD_SLOW_AHEAD', name: 'DEAD SLOW', en: 'DEAD SLOW AHEAD', rpm: 25 },
   { code: 'SLOW_AHEAD', name: 'SLOW', en: 'SLOW AHEAD', rpm: 38 },
   { code: 'HALF_AHEAD', name: 'HALF', en: 'HALF AHEAD', rpm: 52 },
-  { code: 'FULL_AHEAD', name: 'FULL', en: 'FULL AHEAD', rpm: 78 },
+  { code: 'FULL_AHEAD', name: 'FULL', en: 'FULL AHEAD', rpm: 75 },
   { code: 'NAV_FULL', name: 'NAV FULL', en: 'NAV FULL AHEAD', rpm: 80 }
 ];
 
 const POS_COLOR: Record<TelegraphPosition, string> = {
+  FULL_ASTERN: '#5d3a8c',
+  HALF_ASTERN: '#3b5a8c',
+  SLOW_ASTERN: '#3a7ba8',
+  DEAD_SLOW_ASTERN: '#5d8aa8',
   STOP: '#7A7790',
   DEAD_SLOW_AHEAD: '#7ab47c',
   SLOW_AHEAD: '#3fb5b0',

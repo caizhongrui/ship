@@ -35,12 +35,16 @@ export interface DiagResult {
 }
 
 export type TelegraphPosition =
-  | 'STOP'
-  | 'DEAD_SLOW_AHEAD'
-  | 'SLOW_AHEAD'
-  | 'HALF_AHEAD'
+  | 'NAV_FULL'
   | 'FULL_AHEAD'
-  | 'NAV_FULL';
+  | 'HALF_AHEAD'
+  | 'SLOW_AHEAD'
+  | 'DEAD_SLOW_AHEAD'
+  | 'STOP'
+  | 'DEAD_SLOW_ASTERN'
+  | 'SLOW_ASTERN'
+  | 'HALF_ASTERN'
+  | 'FULL_ASTERN';
 
 export interface EngineState {
   t: number; // 仿真时间秒

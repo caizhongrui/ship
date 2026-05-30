@@ -58,7 +58,7 @@
               :values="t.state.cylExhaust"
               :min="0"
               :max="500"
-              :warn="380"
+              :warn="390"
               :danger="390"
               :threshold="390"
             />
@@ -85,12 +85,12 @@ import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();
 
-// 启动空气压力：启动前稳定在 28.2bar（瓶压），启动后控制稳定在 7-9 bar
+// 启动空气压力：启动前 28 bar（瓶压），启动后 23 bar（消耗后）
 const startAirPressure = computed(() => {
-  if (t.state.rpm < 5) {
-    return 28.2 + Math.sin(t.state.t * 0.1) * 0.1; // 启动前 ~28.2 bar
+  if (Math.abs(t.state.rpm) < 5) {
+    return 28.0 + Math.sin(t.state.t * 0.1) * 0.1;
   }
-  return 8 + Math.sin(t.state.t * 0.3) * 1; // 启动后 7-9 bar 控制带
+  return 23.0 + Math.sin(t.state.t * 0.3) * 0.3;
 });
 
 // === 左列五卡 ===

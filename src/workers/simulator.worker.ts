@@ -340,27 +340,30 @@ self.onmessage = (e: MessageEvent) => {
       timeScale = msg.value;
       break;
     case 'cmd.clearFault': {
-      // === 故障修复 = "软重放" ===
-      // - 清除故障 + 标记 done（不会再次注入）
-      // - 仿真时间归零、车钟回 STOP、基线冷态、累加器清零
-      // - 但 **保留主线程的 telemetry/alarm 历史**（monoT 持续递增）
-      // - 当前 scriptMode 保持，AUTO 下会重新跑剧本（这次不会出故障）
+      // === 故障修复 = 直接进入正常 NAV FULL 运转状态 ===
+      // 不再软重放，直接把主机切到额定工况，所有数据显示正常运行值。
       faultInjector.clear(state);
       alarmEngine.reset();
       exhaustFaultProgress = 0;
       cylAlarmFiredAt = -1;
       bearingFaultActive = false;
       autoSlowedDown = false;
-      state.t = 0;
-      state.rpm = 0;
-      state.rpmTarget = 0;
-      state.loadPct = 0;
-      state.power = 0;
-      state.bearingTemp = 55; // 修复后回到正常负荷温度
-      state.lubeOilTemp = 45; // 滑油温度回正常
-      state.telegraph = 'STOP';
-      baseCylExhaust = Array(8).fill(25);
-      baseExhaustManifold = 25;
+      scriptMode = false;
+      state.t = 300; // 已是脚本末尾
+      state.rpm = 80;
+      state.rpmTarget = 80;
+      state.loadPct = 100;
+      state.power = 42310;
+      state.bearingTemp = 55;
+      state.lubeOilTemp = 50;
+      state.lubeOilPressure = 4.51;
+      state.scavPressure = 2.85;
+      state.telegraph = 'NAV_FULL';
+      // 8 缸排温恢复到正常运行值（375-385℃，全部 < 390 阈值）
+      baseCylExhaust = [378, 380, 379, 382, 381, 379, 383, 378];
+      baseExhaustManifold = 375;
+      for (let i = 0; i < 8; i++) state.cylExhaust[i] = baseCylExhaust[i];
+      state.exhaustManifold = baseExhaustManifold;
       cylAccum = elecAccum = scavAccum = 0;
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;

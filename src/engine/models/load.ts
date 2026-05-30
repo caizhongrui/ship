@@ -40,7 +40,8 @@ function interp(x: number, table: [number, number][]) {
 }
 
 export function stepLoad(state: EngineState) {
-  const rpmRatio = state.rpm / RATED_RPM;
+  // 用 abs(rpm) 计算负荷，让倒车也能产生功率
+  const rpmRatio = Math.abs(state.rpm) / RATED_RPM;
   const loadRatio = interp(rpmRatio, CURVE);
   state.loadPct = loadRatio * 100;
   state.power = loadRatio * RATED_POWER;
