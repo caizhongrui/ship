@@ -137,14 +137,16 @@ const session = useSessionStore();
 const alarms = useAlarmStore();
 const reportStore = useReportStore();
 
-const FULL_ADVICE_BOTH = `各缸排温过高，多为本缸供油异常、雾化不良、压缩不良、排气不畅、缸套活塞漏气、喷油控制故障。
-建议检查喷油器启阀压力是否异常、高压油泵及燃油定时导致单缸供油量过大；
-建议检查排气阀及液压驱动系统，排气阀延迟开启且开度不足导致换气不充分等原因。
+const FULL_ADVICE_BOTH = `一、故障分析
+本次多参数联动异常不属于主机燃油、进气、冷却系统单体故障，核心故障根源为船舶轴系及螺旋桨运行阻力异常增大，引发整机超负荷连锁故障。外部负载超限导致主机持续高负荷做功、循环供油量被动增加，进而出现全域气缸排温超标，同时额外轴系载荷造成中间轴承摩擦过载、温度超限报警。
 
-中间轴承温度超温，极大可能原因为中间轴承负荷过大。
-建议测量轴承实际负荷，在轴承附近用液压千斤顶替代轴承支撑轴系，通过压力和位移的曲线图来推算出实际负荷；
-建议检查轴系润滑系统问题，轴承内滑油流失是导致高温的可能原因；
-建议检查轴承间隙，径向间隙过小引起破坏油膜引起摩擦过热等原因。`;
+二、诊断结论（置信度 97%）
+确诊为外部负载过载引发的主机、轴系连锁故障。核心故障为螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小、负荷过大。
+
+三、维修建议
+1. 轴系盘车检测：停机后手动盘车，若盘车阻力显著偏大，可确认轴系、螺旋桨存在阻力异常；
+2. 螺旋桨检测清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕杂物，检查桨叶是否变形、破损、蚀损；
+3. 中间轴承系统检修：检查滑油油位、油质、油压，排查冷却管路堵塞、阀门故障；检查轴承间隙及负荷。`;
 
 const ADVICE_CYL_ONLY = `各缸排温过高，多为本缸供油异常、雾化不良、压缩不良、排气不畅、缸套活塞漏气、喷油控制故障。
 建议检查喷油器启阀压力是否异常、高压油泵及燃油定时导致单缸供油量过大；
@@ -258,29 +260,16 @@ async function onRepair() {
     )
     .join('\n');
 
-  // 按 snapshot 中真实命中的故障组装证据
-  const evParts: string[] = [];
+  // 按 snapshot 命中的故障选取对应的完整分析建议文本
   let adviceText = '';
   if (snap) {
-    if (snap.cylOver) {
-      evParts.push(
-        `• 各缸排温超 390℃（最高 ${snap.maxCyl.toFixed(1)}℃，超阈值 ${(snap.maxCyl - 390).toFixed(1)}℃）`
-      );
-    }
-    if (snap.bearingOver) {
-      evParts.push(
-        `• 中间轴承温度 ${snap.bearingTemp.toFixed(1)}℃（超 75℃ 报警阈值 ${(snap.bearingTemp - 75).toFixed(1)}℃）`
-      );
-    }
     if (snap.cylOver && snap.bearingOver) adviceText = FULL_ADVICE_BOTH;
     else if (snap.cylOver) adviceText = ADVICE_CYL_ONLY;
     else if (snap.bearingOver) adviceText = ADVICE_BEARING_ONLY;
     else adviceText = ADVICE_NORMAL;
   }
-  const evidence = evParts.join('\n');
-  const cause =
-    (evidence ? `命中证据：\n${evidence}\n\n` : '') +
-    `AI 故障分析及维修建议：\n${adviceText}`;
+  // 故障原因分析 = 直接引用完整三段式分析文本（一、故障分析 / 二、诊断结论 / 三、维修建议）
+  const cause = adviceText;
 
   const repairedData =
     `主机转速：80.0 rpm\n` +
@@ -291,7 +280,7 @@ async function onRepair() {
     `各缸排温（已恢复正常）：380.0 / 378.0 / 377.0 / 382.0 / 381.0 / 379.0 / 383.0 / 378.0 ℃\n` +
     `中间轴承温度：55.0 ℃`;
 
-  const conclusion = `经诊断系统识别为「各缸排温过高 + 中间轴承温度过高」联动故障。\n按 AI 建议进行现场处置后，故障已清除，主机各项参数恢复至额定运行范围。`;
+  const conclusion = `经 AI 智能诊断系统识别（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障——核心故障为螺旋桨缠物、桨叶破损，中间轴承润滑冷却异常、轴承间隙过小、负荷过大。\n按维修建议进行轴系盘车检测、潜水清理桨叶缠绕物、中间轴承系统检修后，故障已彻底清除，主机各项参数恢复至额定运行范围。`;
 
   await reportStore.load();
   await reportStore.save({

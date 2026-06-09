@@ -40,11 +40,9 @@ export type TelegraphPosition =
   | 'HALF_AHEAD'
   | 'SLOW_AHEAD'
   | 'DEAD_SLOW_AHEAD'
-  | 'STOP'
-  | 'DEAD_SLOW_ASTERN'
-  | 'SLOW_ASTERN'
-  | 'HALF_ASTERN'
-  | 'FULL_ASTERN';
+  | 'STOP';
+
+export type SimDirection = 'AHEAD' | 'ASTERN';
 
 export interface EngineState {
   t: number; // 仿真时间秒

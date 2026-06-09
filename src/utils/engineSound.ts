@@ -1,12 +1,9 @@
 /**
  * 主机运行背景音（船舱内大型船舶发动机录音，循环播放）
- * 只要主机处于运转状态（session.running）就持续播放，大音量。
- *
- * 双重保险循环：HTMLAudioElement.loop = true + ended 事件兜底
- * （某些 mp3 文件末尾有静音 padding 会让原生 loop 失效）
+ * 运行状态时连续大音量循环；停止/重置后干净归零。
  */
 let audio: HTMLAudioElement | null = null;
-let wantPlaying = false; // 期望播放状态（用户/系统意图）
+let wantPlaying = false;
 
 function ensure(): HTMLAudioElement {
   if (!audio) {
@@ -15,23 +12,11 @@ function ensure(): HTMLAudioElement {
     audio.volume = 0.95;
     audio.preload = 'auto';
 
-    // 兜底循环：到结尾后强制重置并继续播放
+    // 兜底循环：mp3 文件末尾静音 padding 可能让原生 loop 失效
     audio.addEventListener('ended', () => {
       if (audio && wantPlaying) {
         audio.currentTime = 0;
         audio.play().catch(() => {});
-      }
-    });
-
-    // 兜底自动恢复：如果意外暂停（系统休眠、焦点切换等）而我们仍想播放，恢复
-    audio.addEventListener('pause', () => {
-      if (audio && wantPlaying) {
-        // 微延迟避免与正常 pause 操作冲突
-        setTimeout(() => {
-          if (audio && wantPlaying && audio.paused) {
-            audio.play().catch(() => {});
-          }
-        }, 200);
       }
     });
   }
@@ -43,16 +28,23 @@ export function updateEngineSound(running: boolean, _rpm: number) {
   wantPlaying = running;
   if (running) {
     a.volume = 0.95;
-    if (a.paused) a.play().catch(() => {});
+    // 不检查 paused，无脑 play()（已在播放则 Promise 直接 resolve）
+    a.play().catch(() => {});
   } else {
     if (!a.paused) a.pause();
   }
 }
 
-export function stopEngineSound() {
+/** 重置：暂停并回到起始位置（供 重置按钮 调用） */
+export function resetEngineSound() {
   wantPlaying = false;
-  if (audio && !audio.paused) {
+  if (audio) {
     audio.pause();
     audio.currentTime = 0;
   }
+}
+
+/** 登出：彻底停止 */
+export function stopEngineSound() {
+  resetEngineSound();
 }

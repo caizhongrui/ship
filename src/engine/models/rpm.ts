@@ -6,18 +6,14 @@
 import type { EngineState, TelegraphPosition } from '@/types';
 
 // 按客户规范表（04.30 档位 / 转速 / 负荷范围 / 特殊控制）
-// 含倒车档位（负值表示反向）
+// 转速值均为正数，方向（AHEAD/ASTERN）由独立 session.direction 控制
 export const TARGET_RPM: Record<TelegraphPosition, number> = {
   NAV_FULL: 80,
   FULL_AHEAD: 75,
   HALF_AHEAD: 52,
   SLOW_AHEAD: 38,
   DEAD_SLOW_AHEAD: 25,
-  STOP: 0,
-  DEAD_SLOW_ASTERN: -25,
-  SLOW_ASTERN: -38,
-  HALF_ASTERN: -52,
-  FULL_ASTERN: -75
+  STOP: 0
 };
 
 const TAU = 25; // 秒 — 校准至与启动剧本数据表一致的爬升节奏

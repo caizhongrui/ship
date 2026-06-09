@@ -1,6 +1,6 @@
 import { defineStore, acceptHMRUpdate } from 'pinia';
 import { ref, computed } from 'vue';
-import type { TelegraphPosition } from '@/types';
+import type { TelegraphPosition, SimDirection } from '@/types';
 
 export type SimMode = 'AUTO' | 'MANUAL';
 
@@ -20,6 +20,7 @@ export const useSessionStore = defineStore('session', () => {
   const scenario = ref<string>('mooring_test_main');
 
   const mode = ref<SimMode>('AUTO');
+  const direction = ref<SimDirection>('AHEAD');
   const started = ref<boolean>(false);
   const running = ref<boolean>(false);
 
@@ -48,6 +49,11 @@ export const useSessionStore = defineStore('session', () => {
   }
   function setMode(m: SimMode) {
     mode.value = m;
+    // 切回 AUTO 时强制方向恢复 AHEAD（剧本只走正车）
+    if (m === 'AUTO') direction.value = 'AHEAD';
+  }
+  function setDirection(d: SimDirection) {
+    direction.value = d;
   }
   function setTelegraph(p: TelegraphPosition) {
     telegraph.value = p;
@@ -92,6 +98,7 @@ export const useSessionStore = defineStore('session', () => {
     authenticated,
     scenario,
     mode,
+    direction,
     started,
     running,
     simTime,
@@ -103,6 +110,7 @@ export const useSessionStore = defineStore('session', () => {
     stopSim,
     resetSim,
     setMode,
+    setDirection,
     setTelegraph,
     setTimeScale,
     login,

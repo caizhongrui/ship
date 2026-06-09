@@ -172,8 +172,10 @@ function tick() {
       // stepExhaustTemp 现在写到 baseCylExhaust，不再写 state.cylExhaust
       stepExhaustTempBase(elapsed);
       // 轴承故障时滑油温度由故障逻辑接管（升到 71℃），物理层不覆盖
+      // 否则用一阶滞后向负荷对应值靠拢（τ≈20s，冷却平滑）
       if (!bearingFaultActive) {
-        state.lubeOilTemp = 35 + (state.loadPct / 100) * 15;
+        const target = 35 + (state.loadPct / 100) * 15;
+        state.lubeOilTemp += ((target - state.lubeOilTemp) / 20) * elapsed;
       }
     }
   } else {
@@ -301,17 +303,23 @@ self.onmessage = (e: MessageEvent) => {
     case 'cmd.stop':
       running = false;
       break;
-    case 'cmd.shutdown':
-      // "停止"按钮：仿真冻结 + 设备状态强制回 STOP（rpm/load/power = 0）
-      running = false;
-      state.telegraph = 'STOP';
-      state.rpmTarget = 0;
-      state.rpm = 0;
-      state.loadPct = 0;
-      state.power = 0;
-      // 推一帧让 UI 立即看到归零；session.running 已 false → 不写历史
+    case 'cmd.shutdown': {
+      // "停止"按钮：无条件进入"冷却模式"
+      //   - 车钟切 SLOW（不论之前在什么档位）
+      //   - 清除所有故障，让温度自然回落到 SLOW 负荷对应值
+      //   - worker 继续 tick，UI 可看到温度逐渐下降
+      //   - session.running 由 UI 端置为 false（不写历史 + 允许故障诊断）
+      state.telegraph = 'SLOW_AHEAD';
+      state.rpmTarget = 38;
+      scriptMode = false; // 退出剧本
+      // 清故障：让 exhaustFaultProgress 自然衰减回 0（TAU=3s），cyl 温度回到负荷基线
+      const exhFault = state.faults['EXHAUST_TEMP_HIGH'];
+      if (exhFault) exhFault.active = false;
+      bearingFaultActive = false;
+      // 注意：不改 running（worker 继续 tick）
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
+    }
     case 'cmd.reset':
       running = false;
       state = emptyState();

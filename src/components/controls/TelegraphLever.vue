@@ -20,6 +20,26 @@
       </button>
     </div>
 
+    <!-- 方向切换（AUTO 下 ASTERN 禁用，AHEAD 强制） -->
+    <div class="tg-dir">
+      <button
+        class="dir-btn ahead"
+        :class="{ 'is-on': session.direction === 'AHEAD' }"
+        :disabled="!session.started"
+        @click="setDir('AHEAD')"
+      >
+        AHEAD
+      </button>
+      <button
+        class="dir-btn astern"
+        :class="{ 'is-on': session.direction === 'ASTERN' }"
+        :disabled="session.mode === 'AUTO' || !session.started"
+        @click="setDir('ASTERN')"
+      >
+        ASTERN
+      </button>
+    </div>
+
     <!-- 开始 / 停止 / 重置 -->
     <div class="tg-ctrl">
       <button
@@ -39,14 +59,10 @@
       </button>
     </div>
 
-    <!-- 加速 -->
-    <button
-      class="tg-btn"
-      :disabled="!manualEnabled || !canUp"
-      @click="stepUp"
-    >
+    <!-- 步进上 -->
+    <button class="tg-btn" :disabled="!manualEnabled || !canUp" @click="stepUp">
       <span class="arrow">▲</span>
-      <span>AHEAD</span>
+      <span>升 档</span>
     </button>
 
     <!-- 6 档刻度 -->
@@ -72,13 +88,13 @@
       </div>
     </div>
 
-    <!-- 减速 -->
+    <!-- 步进下 -->
     <button
       class="tg-btn"
       :disabled="!manualEnabled || !canDown"
       @click="stepDown"
     >
-      <span>ASTERN</span>
+      <span>降 档</span>
       <span class="arrow">▼</span>
     </button>
   </div>
@@ -96,7 +112,8 @@ import {
   simReset,
   simSetMode
 } from '@/engine/simRuntime';
-import type { TelegraphPosition } from '@/types';
+import { resetEngineSound } from '@/utils/engineSound';
+import type { TelegraphPosition, SimDirection } from '@/types';
 import type { SimMode } from '@/stores/session';
 
 const session = useSessionStore();
@@ -106,29 +123,20 @@ const alarms = useAlarmStore();
 interface Pos {
   code: TelegraphPosition;
   name: string;
-  en: string;
   rpm: number;
 }
 
-// 由倒车全速 → STOP → 航行全速（索引 0..9）
+// 6 档（从慢到快）
 const positions: Pos[] = [
-  { code: 'FULL_ASTERN', name: 'FULL ASTERN', en: 'FULL ASTERN', rpm: -75 },
-  { code: 'HALF_ASTERN', name: 'HALF ASTERN', en: 'HALF ASTERN', rpm: -52 },
-  { code: 'SLOW_ASTERN', name: 'SLOW ASTERN', en: 'SLOW ASTERN', rpm: -38 },
-  { code: 'DEAD_SLOW_ASTERN', name: 'DEAD SLOW ASTERN', en: 'DEAD SLOW ASTERN', rpm: -25 },
-  { code: 'STOP', name: 'STOP', en: 'STOP', rpm: 0 },
-  { code: 'DEAD_SLOW_AHEAD', name: 'DEAD SLOW', en: 'DEAD SLOW AHEAD', rpm: 25 },
-  { code: 'SLOW_AHEAD', name: 'SLOW', en: 'SLOW AHEAD', rpm: 38 },
-  { code: 'HALF_AHEAD', name: 'HALF', en: 'HALF AHEAD', rpm: 52 },
-  { code: 'FULL_AHEAD', name: 'FULL', en: 'FULL AHEAD', rpm: 75 },
-  { code: 'NAV_FULL', name: 'NAV FULL', en: 'NAV FULL AHEAD', rpm: 80 }
+  { code: 'STOP', name: 'STOP', rpm: 0 },
+  { code: 'DEAD_SLOW_AHEAD', name: 'DEAD SLOW', rpm: 25 },
+  { code: 'SLOW_AHEAD', name: 'SLOW', rpm: 38 },
+  { code: 'HALF_AHEAD', name: 'HALF', rpm: 52 },
+  { code: 'FULL_AHEAD', name: 'FULL', rpm: 75 },
+  { code: 'NAV_FULL', name: 'NAV FULL', rpm: 80 }
 ];
 
 const POS_COLOR: Record<TelegraphPosition, string> = {
-  FULL_ASTERN: '#5d3a8c',
-  HALF_ASTERN: '#3b5a8c',
-  SLOW_ASTERN: '#3a7ba8',
-  DEAD_SLOW_ASTERN: '#5d8aa8',
   STOP: '#7A7790',
   DEAD_SLOW_AHEAD: '#7ab47c',
   SLOW_AHEAD: '#3fb5b0',
@@ -144,7 +152,6 @@ const currentIndex = computed(() =>
 const canUp = computed(() => currentIndex.value < positions.length - 1);
 const canDown = computed(() => currentIndex.value > 0);
 
-// 仅当 MANUAL + 已开始 时车钟可交互
 const manualEnabled = computed(
   () => session.mode === 'MANUAL' && session.started
 );
@@ -170,28 +177,35 @@ function setMode(m: SimMode) {
   simSetMode(m);
 }
 
+function setDir(d: SimDirection) {
+  if (d === 'ASTERN' && session.mode === 'AUTO') return;
+  if (!session.started) return;
+  session.setDirection(d);
+}
+
 function onStart() {
   if (!session.started) {
-    // 首次开始：重置所有状态再开始
     telemetry.reset();
     alarms.reset();
     simReset();
     session.startSim();
   } else {
-    // 暂停后继续
     session.running = true;
   }
   simStart();
 }
 
 function onPause() {
-  // 停止：设备状态强制回 STOP（rpm/load/power 归 0），仿真冻结
+  // "停止"= 无条件进入冷却模式（车钟 SLOW，温度逐渐回落，仿真继续）
+  // session.running 置 false：UI 状态停止 + 允许进故障诊断
+  // worker 继续 tick：UI 能看到温度变化
   session.stopSim();
-  session.setTelegraph('STOP');
+  session.setTelegraph('SLOW_AHEAD');
   simShutdown();
 }
 
 function onReset() {
+  resetEngineSound(); // 引擎声暂停并回起点
   session.resetSim();
   telemetry.reset();
   alarms.reset();
@@ -220,12 +234,14 @@ function onReset() {
   margin-bottom: 2px;
 }
 
-.tg-mode {
+.tg-mode,
+.tg-dir {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 4px;
 }
-.mode-btn {
+.mode-btn,
+.dir-btn {
   background: var(--c-bg-panel-alt);
   border: 1px solid var(--c-border-soft);
   color: var(--c-text);
@@ -236,13 +252,28 @@ function onReset() {
   font-weight: 600;
   transition: all 0.12s;
 }
-.mode-btn:hover {
+.mode-btn:hover:not(:disabled),
+.dir-btn:hover:not(:disabled) {
   background: var(--c-bg-active);
 }
 .mode-btn.is-on {
   background: var(--c-bg-header);
   border-color: var(--c-bg-header);
   color: #fff;
+}
+.dir-btn.ahead.is-on {
+  background: #1f6e36;
+  border-color: #1f6e36;
+  color: #fff;
+}
+.dir-btn.astern.is-on {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+.dir-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .tg-ctrl {
@@ -293,7 +324,7 @@ function onReset() {
   justify-content: center;
   gap: 6px;
   font-size: 12px;
-  letter-spacing: 4px;
+  letter-spacing: 2px;
   user-select: none;
   transition: all 0.12s;
 }

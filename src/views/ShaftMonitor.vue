@@ -6,7 +6,7 @@
         <div class="ind-panel__title">轴 系 示 意 图</div>
         <div class="ind-panel__body shaft-body">
           <div class="shaft-wrap">
-            <img class="shaft-img" src="/zhouxi1.png" alt="shaft system" />
+            <img class="shaft-img" src="/zhouxi.jpg" alt="shaft system" />
             <!-- 中间轴承温度数值（填入底图蓝色温度框内）-->
             <div class="anno mb-temp num" :class="{ fault: bearingHigh }">
               {{ t.state.bearingTemp.toFixed(1) }}
@@ -109,10 +109,10 @@ const trendSeries = computed(() => [
   justify-content: center;
   background: #ffffff;
 }
-/* 锁定容器为图片比例（1550/804 ≈ 1.928），让标注百分比对得齐 */
+/* 锁定容器为图片比例（3547/1182 ≈ 3.001），让标注百分比对得齐 */
 .shaft-wrap {
   position: relative;
-  aspect-ratio: 1550 / 804;
+  aspect-ratio: 3547 / 1182;
   max-width: 100%;
   max-height: 100%;
   display: block;
@@ -132,27 +132,37 @@ const trendSeries = computed(() => [
   text-align: center;
 }
 
-/* 中间轴承温度 — 直接填入底图蓝色框内（无背景/无边框） */
+/* 中间轴承温度 — 填入"中间轴承温度"文字右侧的空白区域（℃ 内置） */
 .anno.mb-temp {
-  left: 50.5%;
-  top: 41%;
-  font-size: 17px;
-  font-weight: 700;
-  color: #ffffff; /* 蓝框底白字 */
-  letter-spacing: 1px;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  left: 82%;
+  top: 45.5%;
+  min-width: 56px;
+  padding: 1px 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(180deg, #2c5db5 0%, #1e4a99 100%);
+  border: 1px solid #1e4a99;
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.anno.mb-temp::after {
+  content: ' ℃';
+  font-size: 11px;
+  opacity: 0.9;
 }
 .anno.mb-temp.fault {
-  color: #ff3030; /* 超过 75℃ 用红色显示 */
-  text-shadow:
-    0 0 10px rgba(255, 60, 60, 0.95),
-    0 0 4px rgba(255, 255, 255, 0.8),
-    0 1px 2px rgba(0, 0, 0, 0.7);
+  background: linear-gradient(180deg, #d63030 0%, #b51e1e 100%);
+  border-color: #b51e1e;
+  box-shadow:
+    0 0 12px rgba(255, 60, 60, 0.7),
+    0 2px 4px rgba(0, 0, 0, 0.3);
   animation: pulseAnno 1.2s infinite;
 }
 @keyframes pulseAnno {
   0%, 100% { transform: translate(-50%, -50%) scale(1); }
-  50% { transform: translate(-50%, -50%) scale(1.06); }
+  50% { transform: translate(-50%, -50%) scale(1.05); }
 }
 
 /* 关键参数 */

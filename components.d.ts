@@ -19,6 +19,7 @@ declare module 'vue' {
     FeelerGauge: typeof import('./src/components/controls/FeelerGauge.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    RpmGauge: typeof import('./src/components/industrial/RpmGauge.vue')['default']
     StatusCard: typeof import('./src/components/industrial/StatusCard.vue')['default']
     StatusDot: typeof import('./src/components/industrial/StatusDot.vue')['default']
     TelegraphLever: typeof import('./src/components/controls/TelegraphLever.vue')['default']

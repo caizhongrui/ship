@@ -14,13 +14,11 @@
       <div class="col col-center">
         <div class="ind-panel gauges-panel">
           <div class="ind-panel__body row-gauges">
-            <CircleGauge
-              label="转 速"
+            <RpmGauge
               :value="t.state.rpm"
-              :min="0"
-              :max="100"
-              unit="rpm"
+              :max="80"
               :size="170"
+              :direction="session.direction"
             />
             <CircleGauge
               label="负 荷"
@@ -79,11 +77,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import CircleGauge from '@/components/industrial/CircleGauge.vue';
+import RpmGauge from '@/components/industrial/RpmGauge.vue';
 import StatusCard, { type StatusItem } from '@/components/industrial/StatusCard.vue';
 import BarChart8Cyl from '@/components/industrial/BarChart8Cyl.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
+import { useSessionStore } from '@/stores/session';
 
 const t = useTelemetryStore();
+const session = useSessionStore();
 
 // 启动空气压力：启动前 28 bar（瓶压），启动后 23 bar（消耗后）
 const startAirPressure = computed(() => {
