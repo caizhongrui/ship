@@ -124,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
@@ -183,8 +183,12 @@ const maxCylTemp = computed(() =>
 );
 
 const hasFault = computed(() => {
+  // 1) 当前 fault.active；2) 本轮报警历史里出现过的高温报警（停止冷却后仍能修复）
   const f = t.state.faults || {};
-  return Object.values(f).some((x: any) => x?.active);
+  if (Object.values(f).some((x: any) => x?.active)) return true;
+  return alarms.history.some(
+    e => e.id === 'A_CYL_EXH_HIGH' || e.id === 'A_BEARING_TEMP_HIGH'
+  );
 });
 
 // === AI 打字机：首次流式，再次直接展示 ===
@@ -225,23 +229,40 @@ function showAdvice(text: string) {
 function onAnalyze() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
-  const cylMax = maxCylTemp.value;
-  const bt = t.state.bearingTemp;
-  const cylOver = cylMax > 390;
-  const bearingOver = bt > 75;
+
+  // === 故障识别同时看「当前状态」和「本轮报警历史」===
+  // 停止后会冷却，瞬时温度可能已跌破阈值，但本轮内确实发生过故障，应纳入诊断
+  const cylCur = maxCylTemp.value;
+  const btCur = t.state.bearingTemp;
+  // 报警历史里峰值（用于显示）
+  let cylPeak = cylCur;
+  let bearingPeak = btCur;
+  let cylHistory = false;
+  let bearingHistory = false;
+  for (const ev of alarms.history) {
+    if (ev.id === 'A_CYL_EXH_HIGH') {
+      cylHistory = true;
+      if (typeof ev.value === 'number' && ev.value > cylPeak) cylPeak = ev.value;
+    } else if (ev.id === 'A_BEARING_TEMP_HIGH') {
+      bearingHistory = true;
+      if (typeof ev.value === 'number' && ev.value > bearingPeak) bearingPeak = ev.value;
+    }
+  }
+  const cylOver = cylHistory || cylCur > 390;
+  const bearingOver = bearingHistory || btCur > 75;
 
   snapshot.value = {
     hasFault: cylOver || bearingOver,
     cylOver,
     bearingOver,
-    maxCyl: cylMax,
-    bearingTemp: bt,
+    maxCyl: cylPeak,
+    bearingTemp: bearingPeak,
     rpm: t.state.rpm,
     loadPct: t.state.loadPct,
     analyzedAt: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   };
 
-  // 按实际故障情况选择对应建议
+  // 主线场景：两类报警都触发过 → 走权威三段式分析
   let advice = ADVICE_NORMAL;
   if (cylOver && bearingOver) advice = FULL_ADVICE_BOTH;
   else if (cylOver) advice = ADVICE_CYL_ONLY;
@@ -313,6 +334,13 @@ async function onRepair() {
 
   ElMessage.success('故障已修复，诊断报告已自动保存到"报告查询"页');
 }
+
+onMounted(() => {
+  // 进入诊断页时若已不在运行态且本轮触发过故障，自动跑一次分析
+  if (!session.running && hasFault.value && !snapshot.value) {
+    onAnalyze();
+  }
+});
 
 onUnmounted(() => {
   if (typeTimer) clearInterval(typeTimer);
