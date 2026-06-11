@@ -25,7 +25,6 @@
       <button
         class="dir-btn ahead"
         :class="{ 'is-on': session.direction === 'AHEAD' }"
-        :disabled="!session.started"
         @click="setDir('AHEAD')"
       >
         AHEAD
@@ -33,7 +32,7 @@
       <button
         class="dir-btn astern"
         :class="{ 'is-on': session.direction === 'ASTERN' }"
-        :disabled="session.mode === 'AUTO' || !session.started"
+        :disabled="session.mode === 'AUTO'"
         @click="setDir('ASTERN')"
       >
         ASTERN
@@ -152,11 +151,22 @@ const currentIndex = computed(() =>
 const canUp = computed(() => currentIndex.value < positions.length - 1);
 const canDown = computed(() => currentIndex.value > 0);
 
-const manualEnabled = computed(
-  () => session.mode === 'MANUAL' && session.started
-);
+// 手动模式可操控档位：未开始也允许（点档位会自动启动仿真）
+const manualEnabled = computed(() => session.mode === 'MANUAL');
+
+/** 手动模式下若尚未启动，则点档位自动完成"开始"序列 */
+function ensureStartedForManual() {
+  if (session.started) return;
+  telemetry.reset();
+  alarms.reset();
+  simReset();
+  simSetMode('MANUAL'); // reset 把 worker scriptMode 重置为 true，需立即同步
+  session.startSim();
+  simStart();
+}
 
 function applyManual(code: TelegraphPosition) {
+  ensureStartedForManual();
   session.setTelegraph(code);
   simSetTelegraph(code);
 }
@@ -179,7 +189,6 @@ function setMode(m: SimMode) {
 
 function setDir(d: SimDirection) {
   if (d === 'ASTERN' && session.mode === 'AUTO') return;
-  if (!session.started) return;
   session.setDirection(d);
 }
 
@@ -188,6 +197,9 @@ function onStart() {
     telemetry.reset();
     alarms.reset();
     simReset();
+    // 关键：reset 把 worker 的 scriptMode 重置为 true，需立即同步当前 UI 模式
+    // 否则 MANUAL 启动也会跑剧本自动加速到 NAV FULL
+    simSetMode(session.mode);
     session.startSim();
   } else {
     session.running = true;

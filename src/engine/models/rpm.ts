@@ -16,12 +16,14 @@ export const TARGET_RPM: Record<TelegraphPosition, number> = {
   STOP: 0
 };
 
-const TAU = 25; // 秒 — 校准至与启动剧本数据表一致的爬升节奏
+// AUTO 剧本期间脚本直接写 rpm，TAU 不参与；只在 MANUAL/冷却/脚本结束后参与
+// 改为较小值让手动切档响应灵敏（~5s 内收敛至目标值，肉眼看到的就是档位转速）
+const TAU_DEFAULT = 5; // 秒
 
-export function stepRpm(state: EngineState, dt: number) {
+export function stepRpm(state: EngineState, dt: number, tau: number = TAU_DEFAULT) {
   const target = TARGET_RPM[state.telegraph];
   state.rpmTarget = target;
   const error = target - state.rpm;
-  state.rpm += (error / TAU) * dt;
+  state.rpm += (error / tau) * dt;
   if (state.rpm < 0) state.rpm = 0;
 }
