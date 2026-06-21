@@ -2,25 +2,25 @@
   <div class="telegraph">
     <div class="tg-title">车　　钟</div>
 
-    <!-- 模式切换 -->
+    <!-- 模式切换：驾控（剧本驱动）/ 集控（手动操作） -->
     <div class="tg-mode">
       <button
         class="mode-btn"
         :class="{ 'is-on': session.mode === 'AUTO' }"
         @click="setMode('AUTO')"
       >
-        自　动
+        驾　控
       </button>
       <button
         class="mode-btn"
         :class="{ 'is-on': session.mode === 'MANUAL' }"
         @click="setMode('MANUAL')"
       >
-        手　动
+        集　控
       </button>
     </div>
 
-    <!-- 方向切换（AUTO 下 ASTERN 禁用，AHEAD 强制） -->
+    <!-- 方向切换（AHEAD/ASTERN 两种模式下均可选） -->
     <div class="tg-dir">
       <button
         class="dir-btn ahead"
@@ -32,7 +32,6 @@
       <button
         class="dir-btn astern"
         :class="{ 'is-on': session.direction === 'ASTERN' }"
-        :disabled="session.mode === 'AUTO'"
         @click="setDir('ASTERN')"
       >
         ASTERN
@@ -167,6 +166,11 @@ function ensureStartedForManual() {
 
 function applyManual(code: TelegraphPosition) {
   ensureStartedForManual();
+  // 已启动但被停止（例如故障修复后）— 选非 STOP 档位时自动恢复 running 状态
+  if (session.started && !session.running && code !== 'STOP') {
+    session.running = true;
+    simStart();
+  }
   session.setTelegraph(code);
   simSetTelegraph(code);
 }
@@ -188,7 +192,6 @@ function setMode(m: SimMode) {
 }
 
 function setDir(d: SimDirection) {
-  if (d === 'ASTERN' && session.mode === 'AUTO') return;
   session.setDirection(d);
 }
 
@@ -208,11 +211,10 @@ function onStart() {
 }
 
 function onPause() {
-  // "停止"= 无条件进入冷却模式（车钟 SLOW，温度逐渐回落，仿真继续）
+  // "停止"= 车钟切 STOP + 冷却模式（rpm/温度自然回落，仿真继续）
   // session.running 置 false：UI 状态停止 + 允许进故障诊断
-  // worker 继续 tick：UI 能看到温度变化
   session.stopSim();
-  session.setTelegraph('SLOW_AHEAD');
+  session.setTelegraph('STOP');
   simShutdown();
 }
 

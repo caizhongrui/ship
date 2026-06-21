@@ -276,8 +276,9 @@ function stepExhaustTempBase(dt: number) {
 }
 
 function lubeTargetFromRpm(rpm: number) {
+  // STOP (rpm=0) 待机由备用泵维持 3.1 bar；运行中由主泵提升至 4.5
   const TBL: [number, number][] = [
-    [0, 2.1], [12, 2.5], [28, 3.8], [42, 4.2], [56, 4.5], [80, 4.51]
+    [0, 3.1], [12, 3.4], [28, 3.8], [42, 4.2], [56, 4.5], [80, 4.51]
   ];
   if (rpm <= TBL[0][0]) return TBL[0][1];
   if (rpm >= TBL[TBL.length - 1][0]) return TBL[TBL.length - 1][1];
@@ -304,19 +305,17 @@ self.onmessage = (e: MessageEvent) => {
       running = false;
       break;
     case 'cmd.shutdown': {
-      // "停止"按钮：无条件进入"冷却模式"
-      //   - 车钟切 SLOW（不论之前在什么档位）
-      //   - 清除所有故障，让温度自然回落到 SLOW 负荷对应值
+      // "停止"按钮：无条件进入"停车冷却模式"
+      //   - 车钟切 STOP（不论之前在什么档位）
+      //   - 清除所有故障，温度/转速自然回落到 STOP 对应值
       //   - worker 继续 tick，UI 可看到温度逐渐下降
       //   - session.running 由 UI 端置为 false（不写历史 + 允许故障诊断）
-      state.telegraph = 'SLOW_AHEAD';
-      state.rpmTarget = 38;
+      state.telegraph = 'STOP';
+      state.rpmTarget = 0;
       scriptMode = false; // 退出剧本
-      // 清故障：让 exhaustFaultProgress 自然衰减回 0（TAU=3s），cyl 温度回到负荷基线
       const exhFault = state.faults['EXHAUST_TEMP_HIGH'];
       if (exhFault) exhFault.active = false;
       bearingFaultActive = false;
-      // 注意：不改 running（worker 继续 tick）
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
     }
@@ -348,28 +347,29 @@ self.onmessage = (e: MessageEvent) => {
       timeScale = msg.value;
       break;
     case 'cmd.clearFault': {
-      // === 故障修复 = 直接进入正常 NAV FULL 运转状态 ===
-      // 不再软重放，直接把主机切到额定工况，所有数据显示正常运行值。
+      // === 故障修复 = 主机直接进入"STOP 待机"状态（无故障数据，等待人工启动）===
+      // 车钟停在 STOP，转速/负荷为 0，关键参数显示正常待机值，无任何报警/故障标记。
+      // 集控/驾控模式下都一致：用户后续点档位（手动）或重新点开始（自动）才会再次驱动。
       faultInjector.clear(state);
       alarmEngine.reset();
       exhaustFaultProgress = 0;
       cylAlarmFiredAt = -1;
       bearingFaultActive = false;
       autoSlowedDown = false;
-      scriptMode = false;
-      state.t = 300; // 已是脚本末尾
-      state.rpm = 80;
-      state.rpmTarget = 80;
-      state.loadPct = 100;
-      state.power = 42310;
-      state.bearingTemp = 55;
-      state.lubeOilTemp = 50;
-      state.lubeOilPressure = 4.51;
-      state.scavPressure = 2.85;
-      state.telegraph = 'NAV_FULL';
-      // 8 缸排温恢复到正常运行值（375-385℃，全部 < 390 阈值）
-      baseCylExhaust = [378, 380, 379, 382, 381, 379, 383, 378];
-      baseExhaustManifold = 375;
+      scriptMode = false; // 不再自动跑剧本
+      state.t = 300;
+      state.rpm = 0;
+      state.rpmTarget = 0;
+      state.loadPct = 0;
+      state.power = 0;
+      state.bearingTemp = 30;
+      state.lubeOilTemp = 40;
+      state.lubeOilPressure = 3.1; // STOP 待机滑油压力
+      state.scavPressure = 1.0;
+      state.telegraph = 'STOP';
+      // 8 缸排温恢复至 STOP 待机温度（接近环境温度）
+      baseCylExhaust = [35, 35, 35, 35, 35, 35, 35, 35];
+      baseExhaustManifold = 35;
       for (let i = 0; i < 8; i++) state.cylExhaust[i] = baseCylExhaust[i];
       state.exhaustManifold = baseExhaustManifold;
       cylAccum = elecAccum = scavAccum = 0;

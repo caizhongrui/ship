@@ -49,8 +49,7 @@ export const useSessionStore = defineStore('session', () => {
   }
   function setMode(m: SimMode) {
     mode.value = m;
-    // 切回 AUTO 时强制方向恢复 AHEAD（剧本只走正车）
-    if (m === 'AUTO') direction.value = 'AHEAD';
+    // 驾控/集控 均允许 AHEAD/ASTERN
   }
   function setDirection(d: SimDirection) {
     direction.value = d;

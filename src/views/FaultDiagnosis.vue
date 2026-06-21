@@ -293,15 +293,16 @@ async function onRepair() {
   const cause = adviceText;
 
   const repairedData =
-    `主机转速：80.0 rpm\n` +
-    `主机负荷：100.0 %\n` +
-    `主机功率：42310 kW\n` +
-    `滑油压力：4.51 bar\n` +
-    `排烟总管温度：375.0 ℃\n` +
-    `各缸排温（已恢复正常）：380.0 / 378.0 / 377.0 / 382.0 / 381.0 / 379.0 / 383.0 / 378.0 ℃\n` +
-    `中间轴承温度：55.0 ℃`;
+    `车钟档位：STOP（待机）\n` +
+    `主机转速：0.0 rpm\n` +
+    `主机负荷：0.0 %\n` +
+    `主机功率：0 kW\n` +
+    `滑油压力：3.1 bar（备用泵维持）\n` +
+    `排烟总管温度：35.0 ℃\n` +
+    `各缸排温（已恢复正常）：35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 ℃\n` +
+    `中间轴承温度：30.0 ℃`;
 
-  const conclusion = `经 AI 智能诊断系统识别（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障——核心故障为螺旋桨缠物、桨叶破损，中间轴承润滑冷却异常、轴承间隙过小、负荷过大。\n按维修建议进行轴系盘车检测、潜水清理桨叶缠绕物、中间轴承系统检修后，故障已彻底清除，主机各项参数恢复至额定运行范围。`;
+  const conclusion = `经 AI 智能诊断系统识别（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障——核心故障为螺旋桨缠物、桨叶破损，中间轴承润滑冷却异常、轴承间隙过小、负荷过大。\n按维修建议进行轴系盘车检测、潜水清理桨叶缠绕物、中间轴承系统检修后，故障已彻底清除，主机停车在 STOP 待机状态，所有参数恢复至额定无故障值。`;
 
   await reportStore.load();
   await reportStore.save({
@@ -325,10 +326,13 @@ async function onRepair() {
     }
   });
 
-  // 清除故障（软重放）+ 重新同步模式（自动降速曾关掉剧本，AUTO 下需重放）
+  // 清除故障 → 主机进入 STOP 待机
   simClearFault();
-  simSetMode(session.mode);
+  simSetMode(session.mode); // 保持当前驾控/集控模式
+  session.setTelegraph('STOP');
+  session.stopSim(); // running=false，等待用户重新驱动（驾控点开始 / 集控点档位）
   alarms.active.splice(0);
+  alarms.history.splice(0); // 清空报警历史，hasFault 回到 false
   snapshot.value = null;
   typedAdvice.value = '';
 
