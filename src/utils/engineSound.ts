@@ -23,12 +23,13 @@ function ensure(): HTMLAudioElement {
   return audio;
 }
 
-export function updateEngineSound(running: boolean, _rpm: number) {
+export function updateEngineSound(running: boolean, rpm: number) {
   const a = ensure();
-  wantPlaying = running;
-  if (running) {
+  // 只有"运行 + rpm 真在转"才播放：集控点开始/STOP 待机 rpm=0 时静音
+  const shouldPlay = running && Math.abs(rpm) > 0.5;
+  wantPlaying = shouldPlay;
+  if (shouldPlay) {
     a.volume = 0.95;
-    // 不检查 paused，无脑 play()（已在播放则 Promise 直接 resolve）
     a.play().catch(() => {});
   } else {
     if (!a.paused) a.pause();

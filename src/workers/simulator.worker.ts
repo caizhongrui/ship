@@ -236,11 +236,11 @@ function tick() {
   if (cylAlarmFiredAt < 0) {
     if (alarms.some(a => a.id === 'A_CYL_EXH_HIGH')) {
       cylAlarmFiredAt = state.t;
-      // 排温报警 → 系统自动降速至 SLOW（退出剧本，进入物理仿真）
+      // 排温报警 → 系统自动降速至 DEAD SLOW 微速档位（驾控/集控均生效，方向不变）
       if (!autoSlowedDown) {
         autoSlowedDown = true;
         scriptMode = false;
-        state.telegraph = 'SLOW_AHEAD';
+        state.telegraph = 'DEAD_SLOW_AHEAD';
       }
     }
   } else if (!bearingFaultActive && state.t - cylAlarmFiredAt >= 1) {

@@ -54,7 +54,9 @@ export function bootSimRuntime() {
         // 停止状态下：仅刷新当前快照，不写曲线历史
         telemetry.update(m.state, session.running);
         session.simTime = m.state.t;
-        if (session.mode === 'AUTO' && session.telegraph !== m.state.telegraph) {
+        // worker 端的自动事件（剧本爬升 / 故障自动降速 / 停车 / 修复 等）需把档位同步给 UI
+        // 集控模式下也要同步：高温报警后 worker 把 telegraph 改成 SLOW_AHEAD，UI 车钟需立即响应
+        if (session.telegraph !== m.state.telegraph) {
           session.telegraph = m.state.telegraph;
         }
         if (m.alarms?.length) {
