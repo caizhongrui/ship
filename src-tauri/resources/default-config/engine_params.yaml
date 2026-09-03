@@ -22,8 +22,8 @@ bearing:
     diameter_mm: 170
     clearance_min_mm: 0.32
     clearance_max_mm: 0.35
-    temp_warn_c: 75
-    temp_alarm_c: 90
+    temp_warn_c: 65
+    temp_alarm_c: 68
 
 # 启动相关
 startup:

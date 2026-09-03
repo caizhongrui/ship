@@ -118,7 +118,7 @@ const slowdownItems = computed<StatusItem[]>(() => [
   { label: '排烟总管温度高', state: t.state.exhaustManifold > 430 ? 'warn' : 'on' },
   { label: '滑油进口温度高', state: t.state.lubeOilTemp > 60 ? 'warn' : 'on' },
   { label: '冷却水进口温度高', state: 'on' },
-  { label: '中间轴承温度高', state: t.state.bearingTemp > 75 ? 'warn' : 'on' },
+  { label: '中间轴承温度高', state: t.state.bearingTemp > 65 ? 'warn' : 'on' },
   { label: '扫气箱温度高', state: 'on' },
   { label: '主机轴承温度高', state: 'on' }
 ]);

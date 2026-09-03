@@ -17,6 +17,22 @@
         >
           故 障 修 复
         </button>
+        <div class="model-selector">
+          <span class="model-label">AI 模型</span>
+          <el-select
+            v-model="selectedModel"
+            class="model-select"
+            popper-class="diag-model-popper"
+            aria-label="选择故障诊断模型"
+          >
+            <el-option
+              v-for="model in modelOptions"
+              :key="model"
+              :label="model"
+              :value="model"
+            />
+          </el-select>
+        </div>
         <span class="hint" :class="{ 'is-blocked': session.running }">
           {{
             session.running
@@ -59,7 +75,7 @@
                   最高缸温 <b class="num">{{ snapshot.maxCyl.toFixed(1) }}</b>℃
                   ＜ 390℃ &nbsp;|&nbsp;
                   轴承温度 <b class="num">{{ snapshot.bearingTemp.toFixed(1) }}</b>℃
-                  ＜ 75℃
+                  ＜ 65℃
                 </span>
               </div>
             </div>
@@ -88,7 +104,7 @@
                 <span class="num">{{ snapshot.bearingTemp.toFixed(1) }}</span>℃<br />
                 <span class="ev-detail">
                   超阈值
-                  <b class="num">{{ (snapshot.bearingTemp - 75).toFixed(1) }}</b>℃（标称 75℃）
+                  <b class="num">{{ (snapshot.bearingTemp - 65).toFixed(1) }}</b>℃（标称 65℃）
                 </span>
               </div>
             </div>
@@ -137,6 +153,9 @@ const session = useSessionStore();
 const alarms = useAlarmStore();
 const reportStore = useReportStore();
 
+const modelOptions = ['Deepseek-7B', 'Qwen3', 'GLM-5-6B'] as const;
+const selectedModel = ref<(typeof modelOptions)[number]>('Deepseek-7B');
+
 const FULL_ADVICE_BOTH = `一、故障分析
 本次多参数联动异常不属于主机燃油、进气、冷却系统单体故障，核心故障根源为船舶轴系及螺旋桨运行阻力异常增大，引发整机超负荷连锁故障。外部负载超限导致主机持续高负荷做功、循环供油量被动增加，进而出现全域气缸排温超标，同时额外轴系载荷造成中间轴承摩擦过载、温度超限报警。
 
@@ -160,7 +179,7 @@ const ADVICE_BEARING_ONLY = `中间轴承温度超温，极大可能原因为中
 const ADVICE_NORMAL = `经多维参数综合分析，当前主机运行正常，未发现任何异常工况：
 
   • 各缸排气温度均在正常范围（最高 < 390℃ 报警阈值）
-  • 中间轴承温度正常（< 75℃ 报警阈值）
+  • 中间轴承温度正常（≤ 65℃ 标称上限）
   • 主机转速、负荷、滑油压力等核心参数均稳定在额定范围内
 
 无需进行故障处置，继续保持当前运行状态即可。`;
@@ -249,7 +268,7 @@ function onAnalyze() {
     }
   }
   const cylOver = cylHistory || cylCur > 390;
-  const bearingOver = bearingHistory || btCur > 75;
+  const bearingOver = bearingHistory || btCur > 65;
 
   snapshot.value = {
     hasFault: cylOver || bearingOver,
@@ -372,6 +391,32 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+.model-selector {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.model-label {
+  color: var(--c-text-2);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.model-select {
+  width: 136px;
+}
+.model-select :deep(.el-select__wrapper) {
+  min-height: 32px;
+  background: var(--c-bg-panel);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--c-border-soft) inset;
+}
+.model-select :deep(.el-select__selected-item) {
+  color: var(--c-text);
+  font-size: 12px;
+  font-weight: 600;
 }
 .ctrl-right {
   display: flex;

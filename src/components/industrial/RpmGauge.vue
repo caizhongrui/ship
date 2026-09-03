@@ -57,20 +57,20 @@
         font-weight="600"
       >rpm</text>
 
-      <!-- ASTERN / AHEAD 标签（贴近底部，避开 80 刻度） -->
+      <!-- ASTERN / AHEAD 标签（向内收并缩小，避免文字超出表盘） -->
       <text
-        :x="cx - rOuter * 0.82"
-        :y="cy + rOuter * 0.92"
+        :x="cx - rOuter * 0.74"
+        :y="cy + rOuter * 0.96"
         fill="#c73b3b"
-        :font-size="size * 0.072"
+        :font-size="size * 0.058"
         text-anchor="middle"
         font-weight="700"
       >ASTERN</text>
       <text
-        :x="cx + rOuter * 0.82"
-        :y="cy + rOuter * 0.92"
+        :x="cx + rOuter * 0.74"
+        :y="cy + rOuter * 0.96"
         fill="#1f1e33"
-        :font-size="size * 0.072"
+        :font-size="size * 0.058"
         text-anchor="middle"
         font-weight="700"
       >AHEAD</text>

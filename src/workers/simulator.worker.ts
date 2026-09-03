@@ -68,11 +68,11 @@ let lastPostMs = 0;
 let exhaustFaultProgress = 0;
 const FAULT_RAMP_TAU = 3; // 时间常数（秒）
 
-// 故障级联：排温报警发出后 1 秒，触发中间轴承超温至 79℃
+// 故障级联：排温报警发出后 1 秒，触发中间轴承超温至 68℃
 let cylAlarmFiredAt = -1; // 仿真时间（秒），<0 表示未触发
 let bearingFaultActive = false;
 let autoSlowedDown = false; // 报警后是否已自动降速
-const BEARING_FAULT_TARGET = 79; // ℃
+const BEARING_FAULT_TARGET = 68; // ℃（标称 65℃，故障报警值约 68℃）
 const BEARING_FAULT_TAU = 1.2; // 约 1-2 秒升到位
 
 function jitter(amp: number) {
@@ -203,7 +203,7 @@ function tick() {
 
   // ===== 中间轴承温度 =====
   if (bearingFaultActive) {
-    // 故障级联：快速逼近 79℃
+    // 故障级联：快速逼近 68℃
     state.bearingTemp +=
       ((BEARING_FAULT_TARGET - state.bearingTemp) / BEARING_FAULT_TAU) * dt;
   } else {

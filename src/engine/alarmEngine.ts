@@ -37,10 +37,10 @@ const RULES: Rule[] = [
   {
     id: 'A_BEARING_TEMP_HIGH',
     level: 3,
-    msg: '中间轴承温度过高 (>75℃)',
-    threshold: 75,
+    msg: '中间轴承温度过高 (>65℃)',
+    threshold: 65,
     holdSec: 5,
-    test: s => s.bearingTemp > 75,
+    test: s => s.bearingTemp > 65,
     read: s => ({
       tag: 'shaft.bearing.intermediate.temp',
       value: s.bearingTemp

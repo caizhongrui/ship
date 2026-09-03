@@ -27,7 +27,7 @@ rules:
   - id: A_BEARING_TEMP_HIGH
     tag: shaft.bearing.intermediate.temp
     op: '>'
-    threshold: 75
+    threshold: 65
     level: 3
     hold_sec: 5
     action: [alert, suggest_stop]
@@ -58,7 +58,7 @@ rules:
     message: 主机超速
   - id: A_OVERLOAD_COMPOSITE
     type: composite
-    expr: 'count_true([engine.power>42310, engine.rpm>85, engine.cyl.*.pmax>190, engine.exh.manifold>400, shaft.bearing.intermediate.temp>75]) >= 2'
+    expr: 'count_true([engine.power>42310, engine.rpm>85, engine.cyl.*.pmax>190, engine.exh.manifold>400, shaft.bearing.intermediate.temp>65]) >= 2'
     level: 3
     hold_sec: 30
     action: alc_auto_reduce

@@ -2,14 +2,14 @@
  * 中间轴承温度模型
  *
  * 正常工况：稳态约 55℃
- * 故障（间隙过小）：摩擦系数 μ 翻倍以上，温度按一阶滞后爬升至 75–112℃
+ * 故障（间隙过小）：摩擦系数 μ 翻倍以上，温度按一阶滞后爬升并超过 65℃ 标称上限
  *
  * dT/dt = (T_ss - T) / tau
  *   T_ss 由摩擦功率与散热平衡决定
  */
 import type { EngineState } from '@/types';
 
-const TAU = 12; // 一阶时间常数 12s（保证 ~45s 升至 75℃）
+const TAU = 12; // 一阶时间常数 12s
 const T_AMBIENT = 25;
 
 export function stepBearingTemp(state: EngineState, dt: number) {

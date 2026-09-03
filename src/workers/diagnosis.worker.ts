@@ -5,11 +5,11 @@
  *
  *   主机负荷增大触发条件：
  *     - 螺旋桨异常 / 轴系摩擦阻力增大 / 燃烧失衡 / 增压系统失效
- *   中间轴承温度过高（>75℃）故障原因与触发条件：
+ *   中间轴承温度过高（>65℃）故障原因与触发条件：
  *     - 润滑失效 / 对中偏差 / 轴承本体损伤 / 外部热传导
  *
  * 每条规则保留文档原表格四栏：故障类型 / 触发条件 / 阈值数据 / 典型场景。
- * 置信度遵循文档示例 "IF 轴承温度>75℃ THEN 故障原因=润滑失效（置信度85%）"，统一 85%。
+ * 置信度遵循规则示例 "IF 轴承温度>65℃ THEN 故障原因=润滑失效（置信度85%）"，统一 85%。
  */
 
 import type { DiagResult, EngineState } from '@/types';
@@ -36,7 +36,7 @@ function exhaustEvidence(s: EngineState): string | null {
   return `${overCyls.map(n => n + '#').join('/')} 缸排温超 390℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
 }
 
-// 来自文档：中间轴承温度过高（>75℃）故障原因与触发条件
+// 中间轴承温度过高（>65℃）故障原因与触发条件
 const BEARING_RULES: Rule[] = [
   {
     id: 'B-润滑失效',
@@ -45,9 +45,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '水分＞800 ppm 或流量＜180 L/min',
     scenario: '航程中滑油滤器压差突增＞0.3 bar',
     priority: 100,
-    test: s => s.bearingTemp > 75,
+    test: s => s.bearingTemp > 65,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：滑油污染 / 流量不足（水分>800 ppm 或流量<180 L/min）`);
@@ -62,9 +62,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '径向＞0.08 mm / 轴向＞0.05 mm',
     scenario: '船舶搁浅后复航 + 机舱异响',
     priority: 95,
-    test: s => s.bearingTemp > 75,
+    test: s => s.bearingTemp > 65,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：热态偏移超标（径向>0.08 mm 或轴向>0.05 mm）`);
@@ -79,9 +79,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '间隙＞0.30 mm（标准 0.20–0.25 mm）',
     scenario: '长期过负荷运行（＞100% MCR）',
     priority: 90,
-    test: s => s.bearingTemp > 75,
+    test: s => s.bearingTemp > 65,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：巴氏合金层剥落（间隙>0.30 mm，标准 0.20-0.25 mm）`);
@@ -96,9 +96,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '环境温度＞65℃（红外测温验证）',
     scenario: '排气总管隔热层破损区域',
     priority: 105, // 当排温也异常时优先级抬到最高（最匹配级联场景）
-    test: s => s.bearingTemp > 75 && s.exhaustManifold > 400,
+    test: s => s.bearingTemp > 65 && s.exhaustManifold > 400,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 75℃ 报警阈值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(

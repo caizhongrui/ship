@@ -7,7 +7,7 @@ rules:
     priority: 100
     confidence: 0.85
     when:
-      - 'shaft.bearing.intermediate.temp > 75'
+      - 'shaft.bearing.intermediate.temp > 65'
       - 'engine.rpm > 70'
       - 'vibration.shaft.rms > 6'
     min_match: 2

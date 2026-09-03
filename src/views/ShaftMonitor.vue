@@ -68,7 +68,7 @@ import ValueDisplay from '@/components/industrial/ValueDisplay.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();
-const bearingHigh = computed(() => t.state.bearingTemp > 75);
+const bearingHigh = computed(() => t.state.bearingTemp > 65);
 
 const trendSeries = computed(() => [
   {
