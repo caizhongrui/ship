@@ -8,11 +8,11 @@
           :disabled="session.running"
           @click="onAnalyze"
         >
-          {{ snapshot ? '重 新 分 析' : '分 析 当 前 状 态' }}
+          开 始 分 析
         </button>
         <button
           class="big-btn warn"
-          :disabled="!hasFault || session.running"
+          :disabled="!snapshot || !snapshot.hasFault || session.running"
           @click="onRepair"
         >
           故 障 修 复
@@ -24,6 +24,7 @@
             class="model-select"
             popper-class="diag-model-popper"
             aria-label="选择故障诊断模型"
+            @change="onModelChange"
           >
             <el-option
               v-for="model in modelOptions"
@@ -33,12 +34,8 @@
             />
           </el-select>
         </div>
-        <span class="hint" :class="{ 'is-blocked': session.running }">
-          {{
-            session.running
-              ? '⚠ 请先点击侧栏"停止"按钮再进行诊断'
-              : '基于 AI 模型的多维故障分析'
-          }}
+        <span v-if="session.running" class="hint is-blocked">
+          ⚠ 请先点击侧栏"停止"按钮再进行诊断
         </span>
       </div>
       <div class="ctrl-right">
@@ -60,7 +57,7 @@
         <div class="ind-panel__title">报 警 证 据</div>
         <div class="ind-panel__body evidence-body">
           <div v-if="!snapshot" class="empty">
-            点击上方 "分 析 当 前 状 态" 按钮开始诊断
+            请选择 AI 模型，然后点击上方 "开 始 分 析" 按钮开始诊断
           </div>
           <template v-else>
             <!-- 无任何异常 -->
@@ -140,7 +137,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
@@ -153,19 +150,58 @@ const session = useSessionStore();
 const alarms = useAlarmStore();
 const reportStore = useReportStore();
 
-const modelOptions = ['Deepseek-7B', 'Qwen3', 'GLM-5-6B'] as const;
-const selectedModel = ref<(typeof modelOptions)[number]>('Deepseek-7B');
+const modelOptions = ['Deepseek-7B', 'Qwen3', 'GLM-5.3'] as const;
+type ModelName = (typeof modelOptions)[number];
+const selectedModel = ref<ModelName>('Deepseek-7B');
 
-const FULL_ADVICE_BOTH = `一、故障分析
+const FULL_ADVICE_BY_MODEL: Record<ModelName, string> = {
+  'Deepseek-7B': `一、故障分析
 本次多参数联动异常不属于主机燃油、进气、冷却系统单体故障，核心故障根源为船舶轴系及螺旋桨运行阻力异常增大，引发整机超负荷连锁故障。外部负载超限导致主机持续高负荷做功、循环供油量被动增加，进而出现全域气缸排温超标，同时额外轴系载荷造成中间轴承摩擦过载、温度超限报警。
 
-二、诊断结论（置信度 97%）
+二、诊断结论(置信度97%)
 确诊为外部负载过载引发的主机、轴系连锁故障。核心故障为螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小、负荷过大。
 
 三、维修建议
-1. 轴系盘车检测：停机后手动盘车，若盘车阻力显著偏大，可确认轴系、螺旋桨存在阻力异常；
-2. 螺旋桨检测清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕杂物，检查桨叶是否变形、破损、蚀损；
-3. 中间轴承系统检修：检查滑油油位、油质、油压，排查冷却管路堵塞、阀门故障；检查轴承间隙及负荷。`;
+
+1. 轴系盘车检测：停机后手动盘车，若盘车阻力显著偏大，可确认轴系、螺旋桨存在阻力异常;
+2. 螺旋桨检测清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕杂物，检查桨叶是否变形、破损、蚀损;
+3. 中间轴承系统检修：检查滑油油位、油质、油压，排查冷却管路堵塞、阀门故障；检查轴承间隙及负荷。`,
+  Qwen3: `一、故障分析
+本次多参数联动异常并非单纯的主机燃油、进气或冷却系统故障所致，而是船舶轴系与螺旋桨运行阻力异常增大，导致机组长期处于超负荷运行并产生连锁故障。外部负载超限使主机持续高负荷输出、循环供油相对增多，导致全域气缸排温超标；同时轴系承载增大，中间轴承摩擦过载、温度升高，触发中间轴承温度报警。
+
+二、诊断结论（置信度 95%）
+外部负载过载引发的主机-轴系连锁故障。核心表现包括螺旋桨缠物、桨叶破损、以及中间轴承润滑冷却异常；并伴随轴承间隙过小、负荷增大等现象。
+
+三、维修建议
+
+1. 轴系盘车与静态检查：停机后进行手动盘车，若盘车阻力显著偏大，判定轴系、螺旋桨存在阻力异常。
+2. 螺旋桨检查与清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕物，检查桨叶是否变形、破损或蚀损。
+3. 中间轴承系统检修：检查滑油油位、油质、油压；排查冷却管路堵塞、阀门故障；核对轴承间隙与负荷情况，确保润滑冷却系统正常运行。
+4. 外部负载评估与控制：核定当前作业负载，若超限，采取降载或调整螺旋桨工作点、推进器参数等措施，避免再次超负荷。`,
+  'GLM-5.3': `一、故障分析
+本次主机全缸排温高、中间轴承温度高联动报警，经排查可排除燃油、进气、冷却等单体系统故障。故障根本原因为轴系及螺旋桨运行阻力异常增大，造成主机超负荷连锁故障。螺旋桨负载超限使主机持续高负荷运行、循环供油量自动增加，各缸燃烧加剧，导致全域排温偏高；同时异常轴系载荷使中间轴承摩擦负荷骤增、产热过大，超出润滑冷却散热能力，最终触发轴承高温报警，形成负载过大、排温高、轴承高温的连锁故障。
+
+二、诊断结论（置信度96%）
+综合设备工况及故障特征，确诊为螺旋桨及轴系过载引发的主机、轴系连锁故障。主要诱因：1. 螺旋桨缠绕绳索、渔网等杂物；
+2.桨叶变形、破损、空泡腐蚀，运行阻力上升；
+3.中间轴承滑油劣化、供油不足、冷却不良，散热减摩失效；
+4.轴承间隙偏小、轴系对中偏差大，造成轴承附加负荷过高。
+
+三、维修整改建议
+
+1. 轴系盘车检测：主机停机断电后进行手动盘车，若出现盘车阻力偏大、卡顿、阻力不均，可判定轴系或螺旋桨存在阻力异常。
+2. 螺旋桨水下检查清理：安排潜水作业，彻底清除桨叶、桨毂缠绕杂物，检查桨叶是否存在变形、破损、腐蚀、裂纹，修复异常桨况，消除外部阻力。
+3. 中间轴承系统检修：检查轴承滑油油位、油质、供油压力及流量，排查冷却管路、阀门堵塞及泄漏问题，确保润滑冷却回路通畅；检测轴承配合间隙及轴系对中情况，校正装配偏差，消除轴承过载隐患。`
+};
+
+const MODEL_CONCLUSIONS: Record<ModelName, string> = {
+  'Deepseek-7B':
+    '经 Deepseek-7B 诊断（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障。核心故障为螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小、负荷过大。',
+  Qwen3:
+    '经 Qwen3 诊断（置信度 95%），确诊为外部负载过载引发的主机-轴系连锁故障，包括螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小及负荷增大。',
+  'GLM-5.3':
+    '经 GLM-5.3 诊断（置信度 96%），确诊为螺旋桨及轴系过载引发的主机、轴系连锁故障，涉及螺旋桨缠绕或桨叶损伤、中间轴承润滑冷却异常、轴承间隙偏小及轴系对中偏差。'
+};
 
 const ADVICE_CYL_ONLY = `各缸排温过高，多为本缸供油异常、雾化不良、压缩不良、排气不畅、缸套活塞漏气、喷油控制故障。
 建议检查喷油器启阀压力是否异常、高压油泵及燃油定时导致单缸供油量过大；
@@ -185,6 +221,7 @@ const ADVICE_NORMAL = `经多维参数综合分析，当前主机运行正常，
 无需进行故障处置，继续保持当前运行状态即可。`;
 
 interface Snapshot {
+  model: ModelName;
   hasFault: boolean;
   cylOver: boolean;
   bearingOver: boolean;
@@ -200,15 +237,6 @@ const snapshot = ref<Snapshot | null>(null);
 const maxCylTemp = computed(() =>
   t.state.cylExhaust.length ? Math.max(...t.state.cylExhaust) : 0
 );
-
-const hasFault = computed(() => {
-  // 1) 当前 fault.active；2) 本轮报警历史里出现过的高温报警（停止冷却后仍能修复）
-  const f = t.state.faults || {};
-  if (Object.values(f).some((x: any) => x?.active)) return true;
-  return alarms.history.some(
-    e => e.id === 'A_CYL_EXH_HIGH' || e.id === 'A_BEARING_TEMP_HIGH'
-  );
-});
 
 // === AI 打字机：首次流式，再次直接展示 ===
 const typedAdvice = ref('');
@@ -245,6 +273,19 @@ function showAdvice(text: string) {
   }
 }
 
+function clearAnalysis() {
+  if (typeTimer) clearInterval(typeTimer);
+  typeTimer = null;
+  snapshot.value = null;
+  typedAdvice.value = '';
+  typing.value = false;
+  hasAnimatedOnce = false;
+}
+
+function onModelChange() {
+  clearAnalysis();
+}
+
 function onAnalyze() {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
@@ -271,6 +312,7 @@ function onAnalyze() {
   const bearingOver = bearingHistory || btCur > 65;
 
   snapshot.value = {
+    model: selectedModel.value,
     hasFault: cylOver || bearingOver,
     cylOver,
     bearingOver,
@@ -281,9 +323,9 @@ function onAnalyze() {
     analyzedAt: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
   };
 
-  // 主线场景：两类报警都触发过 → 走权威三段式分析
+  // 主线场景：两类报警都触发过 → 展示所选模型的专属分析结果
   let advice = ADVICE_NORMAL;
-  if (cylOver && bearingOver) advice = FULL_ADVICE_BOTH;
+  if (cylOver && bearingOver) advice = FULL_ADVICE_BY_MODEL[selectedModel.value];
   else if (cylOver) advice = ADVICE_CYL_ONLY;
   else if (bearingOver) advice = ADVICE_BEARING_ONLY;
   showAdvice(advice);
@@ -303,7 +345,7 @@ async function onRepair() {
   // 按 snapshot 命中的故障选取对应的完整分析建议文本
   let adviceText = '';
   if (snap) {
-    if (snap.cylOver && snap.bearingOver) adviceText = FULL_ADVICE_BOTH;
+    if (snap.cylOver && snap.bearingOver) adviceText = FULL_ADVICE_BY_MODEL[snap.model];
     else if (snap.cylOver) adviceText = ADVICE_CYL_ONLY;
     else if (snap.bearingOver) adviceText = ADVICE_BEARING_ONLY;
     else adviceText = ADVICE_NORMAL;
@@ -321,7 +363,11 @@ async function onRepair() {
     `各缸排温（已恢复正常）：35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 / 35.0 ℃\n` +
     `中间轴承温度：30.0 ℃`;
 
-  const conclusion = `经 AI 智能诊断系统识别（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障——核心故障为螺旋桨缠物、桨叶破损，中间轴承润滑冷却异常、轴承间隙过小、负荷过大。\n按维修建议进行轴系盘车检测、潜水清理桨叶缠绕物、中间轴承系统检修后，故障已彻底清除，主机停车在 STOP 待机状态，所有参数恢复至额定无故障值。`;
+  const diagnosisConclusion =
+    snap?.cylOver && snap?.bearingOver
+      ? MODEL_CONCLUSIONS[snap.model]
+      : '经 AI 智能诊断系统识别，已完成当前异常状态分析。';
+  const conclusion = `${diagnosisConclusion}\n按维修建议完成检修后，故障已彻底清除，主机停车在 STOP 待机状态，所有参数恢复至额定无故障值。`;
 
   await reportStore.load();
   await reportStore.save({
@@ -351,19 +397,11 @@ async function onRepair() {
   session.setTelegraph('STOP');
   session.stopSim(); // running=false，等待用户重新驱动（驾控点开始 / 集控点档位）
   alarms.active.splice(0);
-  alarms.history.splice(0); // 清空报警历史，hasFault 回到 false
-  snapshot.value = null;
-  typedAdvice.value = '';
+  alarms.history.splice(0); // 清空报警历史
+  clearAnalysis();
 
   ElMessage.success('故障已修复，诊断报告已自动保存到"报告查询"页');
 }
-
-onMounted(() => {
-  // 进入诊断页时若已不在运行态且本轮触发过故障，自动跑一次分析
-  if (!session.running && hasFault.value && !snapshot.value) {
-    onAnalyze();
-  }
-});
 
 onUnmounted(() => {
   if (typeTimer) clearInterval(typeTimer);
