@@ -1,32 +1,51 @@
-/**
- * 中间轴承温度模型
- *
- * 正常工况：稳态约 55℃
- * 故障（间隙过小）：摩擦系数 μ 翻倍以上，温度按一阶滞后爬升并超过 65℃ 标称上限
- *
- * dT/dt = (T_ss - T) / tau
- *   T_ss 由摩擦功率与散热平衡决定
- */
+/** 中间轴承温度及中间轴振动位移模型。 */
 import type { EngineState } from '@/types';
 
-const TAU = 12; // 一阶时间常数 12s
 const T_AMBIENT = 25;
+const BEARING_NOMINAL = 55;
+const BEARING_ALARM = 58;
 
-export function stepBearingTemp(state: EngineState, dt: number) {
-  const fault = state.faults['BEARING_CLEARANCE_LOW'];
-  const muFactor = fault?.active
-    ? Number((fault as any).muFactor ?? 3.5)
-    : 1.0;
+// 主机转速 -> 轴系振动位移（mm），节点之间线性插值。
+// 60–69 rpm 逐步升至 0.16 mm，70 rpm 起进入 0.20–0.21 mm 报警区间。
+const VIBRATION_DISPLACEMENT: [number, number][] = [
+  [0, 0],
+  [10, 0],
+  [20, 0.01],
+  [30, 0.02],
+  [40, 0.05],
+  [50, 0.06],
+  [60, 0.09],
+  [69, 0.16],
+  [70, 0.201],
+  [80, 0.21]
+];
 
-  const loadRatio = state.loadPct / 100;
-  // 正常稳态：T_ss = 25 + 30 * loadRatio  (满负荷约 55℃)
-  // 故障稳态：T_ss = 25 + 30 * loadRatio * muFactor
-  const tSteady = T_AMBIENT + 30 * loadRatio * muFactor;
+function vibrationFromRpm(rpm: number) {
+  const x = Math.abs(rpm);
+  if (x <= VIBRATION_DISPLACEMENT[0][0]) return 0;
+  if (x >= VIBRATION_DISPLACEMENT[VIBRATION_DISPLACEMENT.length - 1][0]) {
+    return VIBRATION_DISPLACEMENT[VIBRATION_DISPLACEMENT.length - 1][1];
+  }
+  for (let i = 1; i < VIBRATION_DISPLACEMENT.length; i++) {
+    const [x1, y1] = VIBRATION_DISPLACEMENT[i];
+    if (x <= x1) {
+      const [x0, y0] = VIBRATION_DISPLACEMENT[i - 1];
+      return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+    }
+  }
+  return 0;
+}
 
-  state.bearingTemp += ((tSteady - state.bearingTemp) / TAU) * dt;
-
-  // 振动随负荷与故障增大
-  const vibBase = 2 + loadRatio * 4;
-  state.shaftVibration = vibBase * (fault?.active ? 2.2 : 1) +
-    (Math.random() - 0.5) * 0.3;
+export function stepBearingTemp(state: EngineState, _dt: number) {
+  const rpm = Math.abs(state.rpm);
+  if (rpm >= 75) {
+    // 75 rpm 时达到 58℃，随后仅小幅升至 58.2℃，触发温度高报警。
+    state.bearingTemp = BEARING_ALARM + Math.min((rpm - 75) / 5, 1) * 0.2;
+  } else {
+    // 70 rpm 前随转速线性升至标称 55℃，70–75 rpm 保持标称值。
+    state.bearingTemp =
+      T_AMBIENT +
+      (BEARING_NOMINAL - T_AMBIENT) * Math.min(rpm / 70, 1);
+  }
+  state.shaftVibration = vibrationFromRpm(state.rpm);
 }

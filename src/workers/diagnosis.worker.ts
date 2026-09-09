@@ -5,11 +5,11 @@
  *
  *   主机负荷增大触发条件：
  *     - 螺旋桨异常 / 轴系摩擦阻力增大 / 燃烧失衡 / 增压系统失效
- *   中间轴承温度过高（>65℃）故障原因与触发条件：
+ *   中间轴承温度过高（≥58℃，标称 55℃）故障原因与触发条件：
  *     - 润滑失效 / 对中偏差 / 轴承本体损伤 / 外部热传导
  *
  * 每条规则保留文档原表格四栏：故障类型 / 触发条件 / 阈值数据 / 典型场景。
- * 置信度遵循规则示例 "IF 轴承温度>65℃ THEN 故障原因=润滑失效（置信度85%）"，统一 85%。
+ * 置信度遵循规则示例，统一 85%。
  */
 
 import type { DiagResult, EngineState } from '@/types';
@@ -29,14 +29,14 @@ interface Rule {
 function exhaustEvidence(s: EngineState): string | null {
   const overCyls: number[] = [];
   s.cylExhaust.forEach((v, i) => {
-    if (v > 390) overCyls.push(i + 1);
+    if (v > 450) overCyls.push(i + 1);
   });
   if (overCyls.length === 0) return null;
   const max = Math.max(...s.cylExhaust);
-  return `${overCyls.map(n => n + '#').join('/')} 缸排温超 390℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
+  return `${overCyls.map(n => n + '#').join('/')} 缸排温超 450℃（最高 ${max.toFixed(1)}℃），高热载传导加速轴承升温`;
 }
 
-// 中间轴承温度过高（>65℃）故障原因与触发条件
+// 中间轴承温度过高（≥58℃，标称 55℃）故障原因与触发条件
 const BEARING_RULES: Rule[] = [
   {
     id: 'B-润滑失效',
@@ -45,9 +45,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '水分＞800 ppm 或流量＜180 L/min',
     scenario: '航程中滑油滤器压差突增＞0.3 bar',
     priority: 100,
-    test: s => s.bearingTemp > 65,
+    test: s => s.bearingTemp >= 58,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 达到 58℃ 报警值（标称 55℃）`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：滑油污染 / 流量不足（水分>800 ppm 或流量<180 L/min）`);
@@ -62,9 +62,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '径向＞0.08 mm / 轴向＞0.05 mm',
     scenario: '船舶搁浅后复航 + 机舱异响',
     priority: 95,
-    test: s => s.bearingTemp > 65,
+    test: s => s.bearingTemp >= 58,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 达到 58℃ 报警值（标称 55℃）`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：热态偏移超标（径向>0.08 mm 或轴向>0.05 mm）`);
@@ -79,9 +79,9 @@ const BEARING_RULES: Rule[] = [
     threshold: '间隙＞0.30 mm（标准 0.20–0.25 mm）',
     scenario: '长期过负荷运行（＞100% MCR）',
     priority: 90,
-    test: s => s.bearingTemp > 65,
+    test: s => s.bearingTemp >= 58,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 达到 58℃ 报警值（标称 55℃）`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(`触发条件：巴氏合金层剥落（间隙>0.30 mm，标准 0.20-0.25 mm）`);
@@ -96,13 +96,13 @@ const BEARING_RULES: Rule[] = [
     threshold: '环境温度＞65℃（红外测温验证）',
     scenario: '排气总管隔热层破损区域',
     priority: 105, // 当排温也异常时优先级抬到最高（最匹配级联场景）
-    test: s => s.bearingTemp > 65 && s.exhaustManifold > 400,
+    test: s => s.bearingTemp >= 58 && s.exhaustManifold > 450,
     evidence: s => {
-      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 超过 65℃ 标称值`];
+      const ev = [`中间轴承温度 ${s.bearingTemp.toFixed(1)}℃ 达到 58℃ 报警值（标称 55℃）`];
       const eh = exhaustEvidence(s);
       if (eh) ev.push(eh);
       ev.push(
-        `排烟总管温度 ${s.exhaustManifold.toFixed(0)}℃（>400℃ 持续高温加速相邻部件升温）`
+        `排烟总管温度 ${s.exhaustManifold.toFixed(0)}℃（>450℃ 持续高温加速相邻部件升温）`
       );
       ev.push(`触发条件：毗邻高温部件（环境温度>65℃ 需红外测温验证）`);
       ev.push(`典型场景：排气总管隔热层破损区域`);
@@ -120,16 +120,16 @@ const LOAD_RULES: Rule[] = [
     threshold: '单缸爆压＞160 bar（设计值 150 bar）',
     scenario: '燃油分油机故障导致黏度＜180 cSt',
     priority: 80,
-    test: s => s.cylExhaust.some(t => t > 390),
+    test: s => s.cylExhaust.some(t => t > 450),
     evidence: s => {
       const maxT = Math.max(...s.cylExhaust);
       const overCyls: number[] = [];
       s.cylExhaust.forEach((v, i) => {
-        if (v > 390) overCyls.push(i + 1);
+        if (v > 450) overCyls.push(i + 1);
       });
       const maxP = Math.max(...s.cylPmax);
       return [
-        `${overCyls.map(n => n + '#').join('/')} 缸排温超 390℃（最高 ${maxT.toFixed(1)}℃）`,
+        `${overCyls.map(n => n + '#').join('/')} 缸排温超 450℃（最高 ${maxT.toFixed(1)}℃）`,
         `单缸爆压 ${maxP.toFixed(0)} bar${maxP > 160 ? '（超 160 bar 设计上限）' : ''}`,
         `触发条件：多缸喷油量超标`,
         `典型场景：燃油分油机故障导致黏度<180 cSt`
@@ -144,13 +144,13 @@ const LOAD_RULES: Rule[] = [
     scenario: '使用高硫油（＞2.5%S）未定期水洗',
     priority: 75,
     test: s =>
-      s.cylExhaust.some(t => t > 390) ||
+      s.cylExhaust.some(t => t > 450) ||
       (s.loadPct > 80 && s.scavPressure < 3.0),
     evidence: s => {
       const ev: string[] = [];
       const maxT = Math.max(...s.cylExhaust);
-      if (s.cylExhaust.some(t => t > 390))
-        ev.push(`最高缸排温 ${maxT.toFixed(1)}℃ 超 390℃`);
+      if (s.cylExhaust.some(t => t > 450))
+        ev.push(`最高缸排温 ${maxT.toFixed(1)}℃ 超 450℃`);
       ev.push(
         `扫气压力 ${s.scavPressure.toFixed(2)} bar @ 负荷 ${s.loadPct.toFixed(0)}%`
       );
@@ -161,7 +161,24 @@ const LOAD_RULES: Rule[] = [
   }
 ];
 
-const ALL_RULES = [...BEARING_RULES, ...LOAD_RULES];
+const VIBRATION_RULES: Rule[] = [
+  {
+    id: 'V-传感器安装偏差',
+    fault: '中间轴振动过大',
+    trigger: '非接触式传感器安装或轴系跳动异常',
+    threshold: '安装距离 2 mm，振动位移偏差＞0.20 mm',
+    scenario: '主机转速达到 70 rpm 后触发振动位移超差报警',
+    priority: 110,
+    test: s => s.shaftVibration > 0.2,
+    evidence: s => [
+      `中间轴振动位移 ${s.shaftVibration.toFixed(2)} mm，超过 0.20 mm 报警阈值`,
+      `非接触式传感器标准安装距离 2 mm`,
+      `主机转速 ${s.rpm.toFixed(1)} rpm`
+    ]
+  }
+];
+
+const ALL_RULES = [...VIBRATION_RULES, ...BEARING_RULES, ...LOAD_RULES];
 
 self.onmessage = (e: MessageEvent) => {
   const msg = e.data;

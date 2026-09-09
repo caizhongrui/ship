@@ -16,19 +16,20 @@ interface Rule {
 }
 
 /**
- * 报警规则库（当前阶段启用两类报警）：
+ * 报警规则库（当前阶段启用三类报警）：
  *   - 单缸排温超限（排气域）
  *   - 中间轴承温度过高（轴系域）
+ *   - 轴系振动位移超限（轴系域）
  * 其他超速 / 超功率 / 扫气压力等暂时不启用，等需要时打开
  */
 const RULES: Rule[] = [
   {
     id: 'A_CYL_EXH_HIGH',
     level: 3,
-    msg: '各缸排温过高 (>390℃)',
-    threshold: 390,
+    msg: '各缸排温过高 (>450℃)',
+    threshold: 450,
     holdSec: 3,
-    test: s => s.cylExhaust.some(t => t > 390),
+    test: s => s.cylExhaust.some(t => t > 450),
     read: s => ({
       tag: 'engine.cyl.*.exhaust_temp',
       value: Math.max(...s.cylExhaust)
@@ -37,13 +38,25 @@ const RULES: Rule[] = [
   {
     id: 'A_BEARING_TEMP_HIGH',
     level: 3,
-    msg: '中间轴承温度过高 (>65℃)',
-    threshold: 65,
-    holdSec: 5,
-    test: s => s.bearingTemp > 65,
+    msg: '中间轴承温度高（标称 55℃，报警值 58℃）',
+    threshold: 58,
+    holdSec: 0,
+    test: s => s.bearingTemp >= 58,
     read: s => ({
       tag: 'shaft.bearing.intermediate.temp',
       value: s.bearingTemp
+    })
+  },
+  {
+    id: 'A_SHAFT_VIBRATION_HIGH',
+    level: 3,
+    msg: '中间轴振动过大（安装距离 2 mm，位移偏差 >0.20 mm）',
+    threshold: 0.2,
+    holdSec: 0,
+    test: s => s.shaftVibration > 0.2,
+    read: s => ({
+      tag: 'vibration.shaft.rms',
+      value: s.shaftVibration
     })
   }
 ];

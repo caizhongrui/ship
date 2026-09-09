@@ -56,9 +56,9 @@
               :values="t.state.cylExhaust"
               :min="0"
               :max="500"
-              :warn="390"
-              :danger="390"
-              :threshold="390"
+              :warn="450"
+              :danger="450"
+              :threshold="450"
             />
           </div>
         </div>
@@ -131,12 +131,12 @@ const stopItems = computed<StatusItem[]>(() => [
 ]);
 
 const slowdownItems = computed<StatusItem[]>(() => [
-  { label: '主机超功率降速', state: t.state.power > 41000 ? 'warn' : 'on' },
+  { label: '主机超功率降速', state: t.state.power > 43000 ? 'warn' : 'on' },
   { label: '主机超速降速', state: t.state.rpm > 82 ? 'warn' : 'on' },
-  { label: '排烟总管温度高', state: t.state.exhaustManifold > 430 ? 'warn' : 'on' },
+  { label: '排烟总管温度高', state: t.state.exhaustManifold > 450 ? 'warn' : 'on' },
   { label: '滑油进口温度高', state: t.state.lubeOilTemp > 60 ? 'warn' : 'on' },
   { label: '冷却水进口温度高', state: 'on' },
-  { label: '中间轴承温度高', state: t.state.bearingTemp > 65 ? 'warn' : 'on' },
+  { label: '中间轴承温度高', state: t.state.bearingTemp >= 58 ? 'warn' : 'on' },
   { label: '扫气箱温度高', state: 'on' },
   { label: '主机轴承温度高', state: 'on' },
   { label: '进气压力低', state: t.state.loadPct > 70 && t.state.scavPressure < 2.5 ? 'warn' : 'on' }

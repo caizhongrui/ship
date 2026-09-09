@@ -70,9 +70,9 @@
                 未检测到故障<br />
                 <span class="ev-detail">
                   最高缸温 <b class="num">{{ snapshot.maxCyl.toFixed(1) }}</b>℃
-                  ＜ 390℃ &nbsp;|&nbsp;
+                  ＜ 450℃ &nbsp;|&nbsp;
                   轴承温度 <b class="num">{{ snapshot.bearingTemp.toFixed(1) }}</b>℃
-                  ＜ 65℃
+                  ＜ 58℃（标称 55℃）
                 </span>
               </div>
             </div>
@@ -84,10 +84,10 @@
                 <span class="ev-name">各缸排温过高</span>
               </div>
               <div class="ev-value">
-                各缸排温超 390℃<br />
+                各缸排温超 450℃<br />
                 <span class="ev-detail">
                   当前最高 <b class="num">{{ snapshot.maxCyl.toFixed(1) }}</b>℃（超阈值
-                  <b class="num">{{ (snapshot.maxCyl - 390).toFixed(1) }}</b>℃）
+                  <b class="num">{{ (snapshot.maxCyl - 450).toFixed(1) }}</b>℃）
                 </span>
               </div>
             </div>
@@ -101,7 +101,20 @@
                 <span class="num">{{ snapshot.bearingTemp.toFixed(1) }}</span>℃<br />
                 <span class="ev-detail">
                   超阈值
-                  <b class="num">{{ (snapshot.bearingTemp - 65).toFixed(1) }}</b>℃（标称 65℃）
+                  <b class="num">{{ (snapshot.bearingTemp - 55).toFixed(1) }}</b>℃（标称 55℃，报警值 58℃）
+                </span>
+              </div>
+            </div>
+
+            <div v-if="snapshot.vibrationOver" class="ev-card vibration">
+              <div class="ev-head">
+                <span class="ev-tag">L3</span>
+                <span class="ev-name">中间轴振动过大</span>
+              </div>
+              <div class="ev-value">
+                <span class="num">{{ snapshot.vibration.toFixed(2) }}</span> mm<br />
+                <span class="ev-detail">
+                  非接触式传感器安装距离 2 mm，振动位移偏差大于 0.20 mm
                 </span>
               </div>
             </div>
@@ -150,57 +163,68 @@ const session = useSessionStore();
 const alarms = useAlarmStore();
 const reportStore = useReportStore();
 
-const modelOptions = ['Deepseek-7B', 'Qwen3', 'GLM-5.3'] as const;
+const modelOptions = ['SFD-LLM', 'Qwen3', 'Deepseek-7B'] as const;
 type ModelName = (typeof modelOptions)[number];
-const selectedModel = ref<ModelName>('Deepseek-7B');
+const selectedModel = ref<ModelName>('SFD-LLM');
 
-const FULL_ADVICE_BY_MODEL: Record<ModelName, string> = {
-  'Deepseek-7B': `一、故障分析
-本次多参数联动异常不属于主机燃油、进气、冷却系统单体故障，核心故障根源为船舶轴系及螺旋桨运行阻力异常增大，引发整机超负荷连锁故障。外部负载超限导致主机持续高负荷做功、循环供油量被动增加，进而出现全域气缸排温超标，同时额外轴系载荷造成中间轴承摩擦过载、温度超限报警。
+const FINAL_ADVICE_BY_MODEL: Record<ModelName, string> = {
+  'SFD-LLM': `一、故障分析
+本次中间轴振动位移超标、中间轴承温度高报警属于轴系运行异常引发的共性连锁现象，可由多项轴系及基座故障共同诱发。核心故障根源为船舶轴系装配偏差、运行工况异常及基座结构刚度缺陷叠加，引发轴系运转稳定性下降连锁故障。轴系对中偏差、轴承间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座对位偏移等各类问题，均会导致轴系运行振动增大，振动位移持续超标，同时异常轴系载荷造成中间轴承摩擦过载、产热加剧，超出冷却润滑散热能力，最终造成轴承温度超限报警。
 
-二、诊断结论(置信度97%)
-确诊为外部负载过载引发的主机、轴系连锁故障。核心故障为螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小、负荷过大。
+二、诊断结论(置信度98%)
+确诊为轴系装配、运行负载及基座结构缺陷叠加引发的轴系连锁故障。核心故障如下：
+1.中间轴轴承安装位置故障，轴系对中偏差超标，轴承基座加强筋强度不足、刚度不足、底座安装对位不正造成中间轴承装配间隙不合理；
+2.轴系对中偏差超标：中间轴法兰处偏移值和曲折值超差；
+3.中间轴轴承冷却水系统故障：冷却水温度、流量异常；
+4.中间轴轴承滑油系统检查：滑油变质、脏堵，不能形成润滑油膜；
+5.传感器链接故障：传感器接线异常、信号传输异常。
 
 三、维修建议
-
-1. 轴系盘车检测：停机后手动盘车，若盘车阻力显著偏大，可确认轴系、螺旋桨存在阻力异常;
-2. 螺旋桨检测清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕杂物，检查桨叶是否变形、破损、蚀损;
-3. 中间轴承系统检修：检查滑油油位、油质、油压，排查冷却管路堵塞、阀门故障；检查轴承间隙及负荷。`,
+1.轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配、传动存在异常；
+2.滑冷却系统检修：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题；
+3.传感器故障检查：重点检查传感器连接是否出现异常；
+4.轴系对中检查：复测中间轴法兰处偏移值和曲折值；
+5.基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因；
+6.中间轴承装配检测：复测轴系轴承装配间隙与负荷，排查装配偏差隐患。`,
   Qwen3: `一、故障分析
-本次多参数联动异常并非单纯的主机燃油、进气或冷却系统故障所致，而是船舶轴系与螺旋桨运行阻力异常增大，导致机组长期处于超负荷运行并产生连锁故障。外部负载超限使主机持续高负荷输出、循环供油相对增多，导致全域气缸排温超标；同时轴系承载增大，中间轴承摩擦过载、温度升高，触发中间轴承温度报警。
+本次中间轴振动位移超标与中间轴承温度高报警，属于轴系运行异常引发的连锁故障，可由多项轴系及基座故障共同诱发。核心根源在于轴系装配偏差、运行工况异常及基座结构刚度缺陷三者叠加，导致轴系运转稳定性下降。
+具体表现为：轴系对中偏差、轴承间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座对位偏移等问题，均会引起轴系振动加剧、位移持续超标；同时，异常轴系载荷造成中间轴承摩擦过载、产热加剧，超出冷却润滑系统的散热能力，最终触发轴承温度超限报警。
 
-二、诊断结论（置信度 95%）
-外部负载过载引发的主机-轴系连锁故障。核心表现包括螺旋桨缠物、桨叶破损、以及中间轴承润滑冷却异常；并伴随轴承间隙过小、负荷增大等现象。
+二、诊断结论（置信度97%）
+确诊为轴系装配、运行负载及基座结构缺陷叠加所致的轴系连锁故障。主要故障点如下：
+1.轴承润滑冷却系统异常
+2.轴系对中偏差超标
+3.轴承基座加强筋强度及刚度不足
+4.底座安装对位不正
+5.中间轴承装配间隙不合理
 
 三、维修建议
-
-1. 轴系盘车与静态检查：停机后进行手动盘车，若盘车阻力显著偏大，判定轴系、螺旋桨存在阻力异常。
-2. 螺旋桨检查与清理：安排潜水作业，全面检查桨叶状态，彻底清理缠绕物，检查桨叶是否变形、破损或蚀损。
-3. 中间轴承系统检修：检查滑油油位、油质、油压；排查冷却管路堵塞、阀门故障；核对轴承间隙与负荷情况，确保润滑冷却系统正常运行。
-4. 外部负载评估与控制：核定当前作业负载，若超限，采取降载或调整螺旋桨工作点、推进器参数等措施，避免再次超负荷。`,
-  'GLM-5.3': `一、故障分析
-本次主机全缸排温高、中间轴承温度高联动报警，经排查可排除燃油、进气、冷却等单体系统故障。故障根本原因为轴系及螺旋桨运行阻力异常增大，造成主机超负荷连锁故障。螺旋桨负载超限使主机持续高负荷运行、循环供油量自动增加，各缸燃烧加剧，导致全域排温偏高；同时异常轴系载荷使中间轴承摩擦负荷骤增、产热过大，超出润滑冷却散热能力，最终触发轴承高温报警，形成负载过大、排温高、轴承高温的连锁故障。
+1.轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配及传动存在异常；
+2.润滑冷却系统检修：检查轴承滑油的油位、油质、油压，排查冷却管路堵塞及阀门故障，排除润滑冷却异常问题；
+3.轴系对中检查：复测中间轴法兰处的偏移值和曲折值，确认对中精度是否满足要求；
+4.基座结构检测加固：核查轴承底座与加强筋的对位状态，检测基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因；
+5.中间轴承装配检测：复测轴系轴承装配间隙与负荷，排查装配偏差隐患。`,
+  'Deepseek-7B': `一、故障分析
+本次中间轴振动位移超标及中间轴承温度高报警，属于轴系运行异常引发的典型共性连锁故障，通常由多项轴系及基座因素共同诱发。核心成因在于船舶轴系装配偏差、运行工况异常与基座结构刚度缺陷相互叠加，导致轴系运转稳定性下降，进而引发一系列连锁反应。具体而言，轴系对中偏差、轴承装配间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座安装对位偏移等问题，均会加剧轴系运行时的振动响应，使振动位移持续超出允许范围；同时，异常轴系载荷会使中间轴承摩擦阻力增大、产热量急剧上升，超出冷却与润滑系统的散热能力，最终导致轴承温度超限并触发高温报警。
 
 二、诊断结论（置信度96%）
-综合设备工况及故障特征，确诊为螺旋桨及轴系过载引发的主机、轴系连锁故障。主要诱因：1. 螺旋桨缠绕绳索、渔网等杂物；
-2.桨叶变形、破损、空泡腐蚀，运行阻力上升；
-3.中间轴承滑油劣化、供油不足、冷却不良，散热减摩失效；
-4.轴承间隙偏小、轴系对中偏差大，造成轴承附加负荷过高。
+确诊本次故障为轴系装配误差、运行负载异常及基座结构缺陷叠加所致的轴系连锁故障。核心缺陷包括：轴系对中偏差超标、中间轴承装配间隙不合理、轴承润滑冷却系统异常、轴承基座加强筋强度与刚度不足，以及底座安装对位不准确。
 
-三、维修整改建议
-
-1. 轴系盘车检测：主机停机断电后进行手动盘车，若出现盘车阻力偏大、卡顿、阻力不均，可判定轴系或螺旋桨存在阻力异常。
-2. 螺旋桨水下检查清理：安排潜水作业，彻底清除桨叶、桨毂缠绕杂物，检查桨叶是否存在变形、破损、腐蚀、裂纹，修复异常桨况，消除外部阻力。
-3. 中间轴承系统检修：检查轴承滑油油位、油质、供油压力及流量，排查冷却管路、阀门堵塞及泄漏问题，确保润滑冷却回路通畅；检测轴承配合间隙及轴系对中情况，校正装配偏差，消除轴承过载隐患。`
+三、维修建议
+1.轴系盘车检查：停机后实施手动盘车，若盘车过程中阻力不均或运转平顺性差，即可判定轴系装配或传动环节存在异常。
+2.润滑冷却系统检修：检查轴承滑油油位、油质及油压，排查冷却管路是否存在堵塞、阀门是否工作正常，以排除润滑冷却异常因素。
+3.轴系对中检查：重新测量中间轴法兰处的偏移值和曲折值，核实对中状态。
+4.基座结构检测加固及精度检测：核查轴承底座与加强筋的对位情况，评估基座结构强度；对底座落位于板材空档或受力薄弱区域，进行补焊加固，以提升基座整体刚度，消除结构振动诱因。
+5.中间轴承装配检测：复测轴系轴承的装配间隙与负荷分布，排查装配偏差隐患，确保轴承工作状态符合设计要求。`
 };
 
 const MODEL_CONCLUSIONS: Record<ModelName, string> = {
-  'Deepseek-7B':
-    '经 Deepseek-7B 诊断（置信度 97%），确诊为外部负载过载引发的主机、轴系连锁故障。核心故障为螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小、负荷过大。',
+  'SFD-LLM':
+    '经 SFD-LLM 船舶故障 AI 诊断垂类大模型诊断（置信度 98%），确诊为轴系装配、运行负载及基座结构缺陷叠加引发的轴系连锁故障。',
   Qwen3:
-    '经 Qwen3 诊断（置信度 95%），确诊为外部负载过载引发的主机-轴系连锁故障，包括螺旋桨缠物、桨叶破损、中间轴承润滑冷却异常、轴承间隙过小及负荷增大。',
-  'GLM-5.3':
-    '经 GLM-5.3 诊断（置信度 96%），确诊为螺旋桨及轴系过载引发的主机、轴系连锁故障，涉及螺旋桨缠绕或桨叶损伤、中间轴承润滑冷却异常、轴承间隙偏小及轴系对中偏差。'
+    '经 Qwen3 诊断（置信度 97%），确诊为轴系装配、运行负载及基座结构缺陷叠加所致的轴系连锁故障。',
+  'Deepseek-7B':
+    '经 Deepseek-7B 诊断（置信度 96%），确诊为轴系装配误差、运行负载异常及基座结构缺陷叠加所致的轴系连锁故障。'
 };
 
 const ADVICE_CYL_ONLY = `各缸排温过高，多为本缸供油异常、雾化不良、压缩不良、排气不畅、缸套活塞漏气、喷油控制故障。
@@ -212,10 +236,15 @@ const ADVICE_BEARING_ONLY = `中间轴承温度超温，极大可能原因为中
 建议检查轴系润滑系统问题，轴承内滑油流失是导致高温的可能原因；
 建议检查轴承间隙，径向间隙过小引起破坏油膜引起摩擦过热等原因。`;
 
+const ADVICE_VIBRATION_ONLY = `中间轴振动位移偏差超过 0.20 mm，已达到报警条件。
+建议检查非接触式振动传感器安装状态，将传感器与轴表面的安装距离复核为 2 mm；
+检查探头支架是否松动、轴表面是否存在跳动，并校验传感器零位及量程。`;
+
 const ADVICE_NORMAL = `经多维参数综合分析，当前主机运行正常，未发现任何异常工况：
 
-  • 各缸排气温度均在正常范围（最高 < 390℃ 报警阈值）
-  • 中间轴承温度正常（≤ 65℃ 标称上限）
+  • 各缸排气温度均在正常范围（最高 < 450℃ 报警阈值）
+  • 中间轴承温度正常（< 58℃，标称值 55℃）
+  • 中间轴振动位移正常（≤ 0.20 mm）
   • 主机转速、负荷、滑油压力等核心参数均稳定在额定范围内
 
 无需进行故障处置，继续保持当前运行状态即可。`;
@@ -225,8 +254,10 @@ interface Snapshot {
   hasFault: boolean;
   cylOver: boolean;
   bearingOver: boolean;
+  vibrationOver: boolean;
   maxCyl: number;
   bearingTemp: number;
+  vibration: number;
   rpm: number;
   loadPct: number;
   analyzedAt: string;
@@ -294,11 +325,14 @@ function onAnalyze() {
   // 停止后会冷却，瞬时温度可能已跌破阈值，但本轮内确实发生过故障，应纳入诊断
   const cylCur = maxCylTemp.value;
   const btCur = t.state.bearingTemp;
+  const vibrationCur = t.state.shaftVibration;
   // 报警历史里峰值（用于显示）
   let cylPeak = cylCur;
   let bearingPeak = btCur;
+  let vibrationPeak = vibrationCur;
   let cylHistory = false;
   let bearingHistory = false;
+  let vibrationHistory = false;
   for (const ev of alarms.history) {
     if (ev.id === 'A_CYL_EXH_HIGH') {
       cylHistory = true;
@@ -306,18 +340,24 @@ function onAnalyze() {
     } else if (ev.id === 'A_BEARING_TEMP_HIGH') {
       bearingHistory = true;
       if (typeof ev.value === 'number' && ev.value > bearingPeak) bearingPeak = ev.value;
+    } else if (ev.id === 'A_SHAFT_VIBRATION_HIGH') {
+      vibrationHistory = true;
+      if (typeof ev.value === 'number' && ev.value > vibrationPeak) vibrationPeak = ev.value;
     }
   }
-  const cylOver = cylHistory || cylCur > 390;
-  const bearingOver = bearingHistory || btCur > 65;
+  const cylOver = cylHistory || cylCur > 450;
+  const bearingOver = bearingHistory || btCur >= 58;
+  const vibrationOver = vibrationHistory || vibrationCur > 0.2;
 
   snapshot.value = {
     model: selectedModel.value,
-    hasFault: cylOver || bearingOver,
+    hasFault: cylOver || bearingOver || vibrationOver,
     cylOver,
     bearingOver,
+    vibrationOver,
     maxCyl: cylPeak,
     bearingTemp: bearingPeak,
+    vibration: vibrationPeak,
     rpm: t.state.rpm,
     loadPct: t.state.loadPct,
     analyzedAt: `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
@@ -325,9 +365,11 @@ function onAnalyze() {
 
   // 主线场景：两类报警都触发过 → 展示所选模型的专属分析结果
   let advice = ADVICE_NORMAL;
-  if (cylOver && bearingOver) advice = FULL_ADVICE_BY_MODEL[selectedModel.value];
+  if (cylOver && bearingOver) advice = FINAL_ADVICE_BY_MODEL[selectedModel.value];
   else if (cylOver) advice = ADVICE_CYL_ONLY;
+  else if (bearingOver && vibrationOver) advice = FINAL_ADVICE_BY_MODEL[selectedModel.value];
   else if (bearingOver) advice = ADVICE_BEARING_ONLY;
+  else if (vibrationOver) advice = ADVICE_VIBRATION_ONLY;
   showAdvice(advice);
 }
 
@@ -345,9 +387,11 @@ async function onRepair() {
   // 按 snapshot 命中的故障选取对应的完整分析建议文本
   let adviceText = '';
   if (snap) {
-    if (snap.cylOver && snap.bearingOver) adviceText = FULL_ADVICE_BY_MODEL[snap.model];
+    if (snap.cylOver && snap.bearingOver) adviceText = FINAL_ADVICE_BY_MODEL[snap.model];
     else if (snap.cylOver) adviceText = ADVICE_CYL_ONLY;
+    else if (snap.bearingOver && snap.vibrationOver) adviceText = FINAL_ADVICE_BY_MODEL[snap.model];
     else if (snap.bearingOver) adviceText = ADVICE_BEARING_ONLY;
+    else if (snap.vibrationOver) adviceText = ADVICE_VIBRATION_ONLY;
     else adviceText = ADVICE_NORMAL;
   }
   // 故障原因分析 = 直接引用完整三段式分析文本（一、故障分析 / 二、诊断结论 / 三、维修建议）
@@ -364,7 +408,7 @@ async function onRepair() {
     `中间轴承温度：30.0 ℃`;
 
   const diagnosisConclusion =
-    snap?.cylOver && snap?.bearingOver
+    (snap?.cylOver && snap?.bearingOver) || (snap?.bearingOver && snap?.vibrationOver)
       ? MODEL_CONCLUSIONS[snap.model]
       : '经 AI 智能诊断系统识别，已完成当前异常状态分析。';
   const conclusion = `${diagnosisConclusion}\n按维修建议完成检修后，故障已彻底清除，主机停车在 STOP 待机状态，所有参数恢复至额定无故障值。`;
@@ -514,6 +558,11 @@ onUnmounted(() => {
   overflow: auto;
   padding: 16px;
 }
+.ai-panel,
+.ai-body {
+  min-width: 0;
+  min-height: 0;
+}
 .empty {
   text-align: center;
   color: var(--c-text-muted);
@@ -599,10 +648,14 @@ onUnmounted(() => {
   white-space: pre-wrap;
   font-family: var(--font-cn);
   color: var(--c-text);
-  font-size: 14px;
-  line-height: 2;
+  font-size: clamp(15px, 1.15vw, 16px);
+  line-height: 1.8;
   margin: 0;
   min-height: 200px;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 /* AI 标签 */

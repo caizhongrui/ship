@@ -58,7 +58,7 @@ const tagOptions: TagOpt[] = [
   { key: 'manifold', label: '排烟总管温度 ℃', color: '#22CC55', pick: s => s.exhaustManifold },
   { key: 'bearing', label: '中间轴承温度 ℃', color: '#33A8FF', pick: s => s.bearingTemp },
   { key: 'scav', label: '扫气压力 bar', color: '#B14EFF', pick: s => s.scavPressure },
-  { key: 'vib', label: '轴系振动 mm/s', color: '#00E0E0', pick: s => s.shaftVibration },
+  { key: 'vib', label: '轴系振动位移 mm', color: '#00E0E0', pick: s => s.shaftVibration },
   { key: 'volt', label: '电网电压 V', color: '#FFFFFF', pick: s => s.busVoltage },
   { key: 'freq', label: '电网频率 Hz', color: '#FF99CC', pick: s => s.busFrequency }
 ];

@@ -71,7 +71,7 @@ tags:
     rate_hz: 1
     noise_pct: 0.3
   - id: vibration.shaft.rms
-    range: [0, 20]
-    unit: mm/s
+    range: [0, 0.21]
+    unit: mm
     rate_hz: 5
-    noise_pct: 1.0
+    noise_pct: 0.0

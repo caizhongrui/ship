@@ -11,6 +11,13 @@
             <div class="anno mb-temp num" :class="{ fault: bearingHigh }">
               {{ t.state.bearingTemp.toFixed(1) }}
             </div>
+            <div class="anno shaft-vib-label">中间轴振动位移</div>
+            <div
+              class="anno shaft-vib-value num"
+              :class="{ fault: vibrationHigh }"
+            >
+              {{ t.state.shaftVibration.toFixed(2) }}
+            </div>
           </div>
         </div>
       </div>
@@ -26,9 +33,11 @@
             :accent="bearingHigh"
           />
           <ValueDisplay
-            label="轴系振动 RMS"
+            label="轴系振动位移"
             :value="t.state.shaftVibration"
-            unit="mm/s"
+            unit="mm"
+            :digits="2"
+            :accent="vibrationHigh"
           />
           <ValueDisplay label="主机转速" :value="t.state.rpm" unit="rpm" />
           <ValueDisplay
@@ -68,7 +77,8 @@ import ValueDisplay from '@/components/industrial/ValueDisplay.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
 
 const t = useTelemetryStore();
-const bearingHigh = computed(() => t.state.bearingTemp > 65);
+const bearingHigh = computed(() => t.state.bearingTemp >= 58);
+const vibrationHigh = computed(() => t.state.shaftVibration > 0.2);
 
 const trendSeries = computed(() => [
   {
@@ -153,6 +163,41 @@ const trendSeries = computed(() => [
   opacity: 0.9;
 }
 .anno.mb-temp.fault {
+  background: linear-gradient(180deg, #d63030 0%, #b51e1e 100%);
+  border-color: #b51e1e;
+  box-shadow:
+    0 0 12px rgba(255, 60, 60, 0.7),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+  animation: pulseAnno 1.2s infinite;
+}
+.anno.shaft-vib-label {
+  left: 62%;
+  top: 80%;
+  font-size: 14px;
+  font-weight: 800;
+  color: #1e4a99;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.anno.shaft-vib-value {
+  left: 74%;
+  top: 80%;
+  min-width: 70px;
+  padding: 1px 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: #ffffff;
+  background: linear-gradient(180deg, #2c5db5 0%, #1e4a99 100%);
+  border: 1px solid #1e4a99;
+  border-radius: 3px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.anno.shaft-vib-value::after {
+  content: ' mm';
+  font-size: 11px;
+  opacity: 0.9;
+}
+.anno.shaft-vib-value.fault {
   background: linear-gradient(180deg, #d63030 0%, #b51e1e 100%);
   border-color: #b51e1e;
   box-shadow:

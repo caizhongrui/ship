@@ -2,14 +2,27 @@
 # 当前与 src/workers/diagnosis.worker.ts 的内置规则保持一致；
 # 后续将由 worker 启动时读取此 YAML（通过 io/yamlLoader）。
 rules:
+  - id: R10
+    fault: 中间轴振动过大
+    priority: 110
+    confidence: 0.9
+    when:
+      - 'engine.rpm >= 70'
+      - 'vibration.shaft.rms > 0.20'
+    min_match: 2
+    advice: |
+      非接触式振动传感器标准安装距离为 2 mm；
+      复核探头安装距离、支架紧固状态、零位和量程；
+      检查轴表面跳动及轴系对中情况。
+
   - id: R12
     fault: 中间轴承间隙过小
     priority: 100
     confidence: 0.85
     when:
-      - 'shaft.bearing.intermediate.temp > 65'
-      - 'engine.rpm > 70'
-      - 'vibration.shaft.rms > 6'
+      - 'shaft.bearing.intermediate.temp >= 58'
+      - 'engine.rpm >= 70'
+      - 'vibration.shaft.rms > 0.20'
     min_match: 2
     advice: |
       用 0.05mm 塞尺测中间轴承四面间隙：
@@ -22,8 +35,8 @@ rules:
     priority: 80
     confidence: 0.6
     when:
-      - 'count(engine.cyl.*.pmax > 190) >= 2'
-      - 'any(engine.cyl.*.exhaust_temp > 430)'
+      - 'count(engine.cyl.*.pmax > 200) >= 2'
+      - 'any(engine.cyl.*.exhaust_temp > 450)'
     advice: |
       检查燃油分油机黏度（应 ≥180 cSt）；
       核对喷油定时与喷油器密封性；
@@ -46,11 +59,10 @@ rules:
     priority: 60
     confidence: 0.5
     when:
-      - 'engine.power > 41000'
+      - 'engine.power > 43000'
       - 'engine.rpm > 85'
-      - 'any(engine.cyl.*.pmax > 195)'
-      - 'engine.exh.manifold > 400'
+      - 'any(engine.cyl.*.pmax > 200)'
+      - 'engine.exh.manifold > 450'
     min_match: 2
     advice: |
-      手动降速；切换至指数控制模式；
-      若 30 秒未恢复，自动负荷控制（ALC）介入。
+      保持参数监测，由值班人员根据实际工况人工调整车钟与负荷。

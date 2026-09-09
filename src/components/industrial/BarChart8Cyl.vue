@@ -49,7 +49,7 @@ const props = withDefaults(
     danger?: number;
     threshold?: number;
   }>(),
-  { min: 0, max: 500, warn: 380, danger: 390 }
+  { min: 0, max: 500, warn: 450, danger: 450 }
 );
 
 function heightPct(v: number) {

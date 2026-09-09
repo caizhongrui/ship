@@ -66,18 +66,18 @@ export const STARTUP_TABLE: ScriptRow[] = [
   { t: 230, tg: 'FULL_AHEAD', rpm: 66, load: 87.6, exh: 347.3, lube: 4.5 },
   { t: 235, tg: 'FULL_AHEAD', rpm: 67, load: 90.7, exh: 349.7, lube: 4.5 },
   { t: 240, tg: 'NAV_FULL', rpm: 68, load: 92, exh: 352, lube: 4.5 },
-  { t: 245, tg: 'NAV_FULL', rpm: 69.3, load: 92.4, exh: 354.3, lube: 4.5 },
-  { t: 250, tg: 'NAV_FULL', rpm: 70.7, load: 93.6, exh: 356.7, lube: 4.5 },
-  { t: 255, tg: 'NAV_FULL', rpm: 72, load: 95, exh: 359, lube: 4.5 },
-  { t: 260, tg: 'NAV_FULL', rpm: 73.3, load: 96.4, exh: 361.3, lube: 4.51 },
-  { t: 265, tg: 'NAV_FULL', rpm: 74.7, load: 97.6, exh: 363.7, lube: 4.51 },
-  { t: 270, tg: 'NAV_FULL', rpm: 76, load: 98, exh: 366, lube: 4.51 },
-  { t: 275, tg: 'NAV_FULL', rpm: 76.7, load: 98.1, exh: 368.3, lube: 4.51 },
-  { t: 280, tg: 'NAV_FULL', rpm: 77.3, load: 98.5, exh: 370.7, lube: 4.51 },
-  { t: 285, tg: 'NAV_FULL', rpm: 78, load: 99, exh: 373, lube: 4.51 },
-  { t: 290, tg: 'NAV_FULL', rpm: 78.7, load: 99.5, exh: 375.3, lube: 4.51 },
-  { t: 295, tg: 'NAV_FULL', rpm: 79.3, load: 99.9, exh: 377.7, lube: 4.51 },
-  { t: 300, tg: 'NAV_FULL', rpm: 80, load: 100, exh: 380, lube: 4.51 }
+  { t: 245, tg: 'NAV_FULL', rpm: 69.3, load: 92.4, exh: 357.7, lube: 4.5 },
+  { t: 250, tg: 'NAV_FULL', rpm: 70.7, load: 93.6, exh: 363.3, lube: 4.5 },
+  { t: 255, tg: 'NAV_FULL', rpm: 72, load: 95, exh: 369, lube: 4.5 },
+  { t: 260, tg: 'NAV_FULL', rpm: 73.3, load: 96.4, exh: 374.7, lube: 4.51 },
+  { t: 265, tg: 'NAV_FULL', rpm: 74.7, load: 97.6, exh: 380.3, lube: 4.51 },
+  { t: 270, tg: 'NAV_FULL', rpm: 76, load: 98, exh: 386, lube: 4.51 },
+  { t: 275, tg: 'NAV_FULL', rpm: 76.7, load: 98.1, exh: 391.7, lube: 4.51 },
+  { t: 280, tg: 'NAV_FULL', rpm: 77.3, load: 98.5, exh: 397.3, lube: 4.51 },
+  { t: 285, tg: 'NAV_FULL', rpm: 78, load: 99, exh: 403, lube: 4.51 },
+  { t: 290, tg: 'NAV_FULL', rpm: 78.7, load: 99.5, exh: 408.7, lube: 4.51 },
+  { t: 295, tg: 'NAV_FULL', rpm: 79.3, load: 99.9, exh: 414.3, lube: 4.51 },
+  { t: 300, tg: 'NAV_FULL', rpm: 80, load: 100, exh: 420, lube: 4.51 }
 ];
 
 export const SCRIPT_DURATION = 300; // 秒

@@ -55,7 +55,7 @@ export interface EngineState {
   exhaustManifold: number; // ℃
   cylPmax: number[]; // 8 个缸 bar
   bearingTemp: number; // ℃ 中间轴承
-  shaftVibration: number; // mm/s
+  shaftVibration: number; // 轴系振动位移 mm
   lubeOilTemp: number;
   lubeOilPressure: number;
   // 电站

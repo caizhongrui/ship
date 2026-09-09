@@ -11,7 +11,7 @@ rules:
   - id: A_CYL_EXH_HIGH
     tag: engine.cyl.*.exhaust_temp
     op: '>'
-    threshold: 430
+    threshold: 450
     level: 3
     hold_sec: 3
     action: [alert, log]
@@ -27,15 +27,23 @@ rules:
   - id: A_BEARING_TEMP_HIGH
     tag: shaft.bearing.intermediate.temp
     op: '>'
-    threshold: 65
+    threshold: 58
     level: 3
-    hold_sec: 5
+    hold_sec: 0
     action: [alert, suggest_stop]
-    message: 中间轴承温度过高
+    message: 中间轴承温度高（标称55℃，报警值58℃）
+  - id: A_SHAFT_VIBRATION_HIGH
+    tag: vibration.shaft.rms
+    op: '>'
+    threshold: 0.20
+    level: 3
+    hold_sec: 0
+    action: [alert, log]
+    message: 中间轴振动过大（传感器安装距离2mm，位移偏差大于0.20mm）
   - id: A_PMAX_HIGH
     tag: engine.cyl.*.pmax
     op: '>'
-    threshold: 190
+    threshold: 200
     level: 2
     hold_sec: 0
     action: [alert]
@@ -43,7 +51,7 @@ rules:
   - id: A_POWER_OVER
     tag: engine.power
     op: '>'
-    threshold: 42310
+    threshold: 43000
     level: 3
     hold_sec: 0
     action: [alert]
@@ -58,8 +66,8 @@ rules:
     message: 主机超速
   - id: A_OVERLOAD_COMPOSITE
     type: composite
-    expr: 'count_true([engine.power>42310, engine.rpm>85, engine.cyl.*.pmax>190, engine.exh.manifold>400, shaft.bearing.intermediate.temp>65]) >= 2'
+    expr: 'count_true([engine.power>43000, engine.rpm>85, engine.cyl.*.pmax>200, engine.exh.manifold>450, shaft.bearing.intermediate.temp>=58]) >= 2'
     level: 3
     hold_sec: 30
-    action: alc_auto_reduce
+    action: [alert, log]
     message: 主机超负荷（复合判定）

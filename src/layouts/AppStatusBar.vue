@@ -1,7 +1,6 @@
 <template>
   <footer class="app-statusbar">
     <span class="seg">{{ now }}</span>
-    <span class="seg">场景：{{ session.scenario }}</span>
     <span class="seg rate-seg">
       速率：
       <select class="rate-select" v-model.number="rate">

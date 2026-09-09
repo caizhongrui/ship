@@ -3,8 +3,8 @@
  *
  * - 内部物理 50ms tick
  * - UI 推送节流 500ms 墙钟（报警立即推）
- * - 启动剧本 0–300s 自动推进；手动切档退出剧本
- * - 故障 290~295s 触发"排温过高"+80℃（**不累积**：base 与显示值分离）
+ * - 启动剧本 0–300s 正常加车至海速 80 rpm；手动切档退出剧本
+ * - 海速排温约 420℃，不注入高温故障，也不触发自动降速
  * - STOP 严格归零
  */
 
@@ -16,7 +16,6 @@ import { stepScavPressure } from '@/engine/models/scavPressure';
 import { stepBearingTemp } from '@/engine/models/bearingTemp';
 import { stepElectric } from '@/engine/models/electric';
 import { AlarmEngine } from '@/engine/alarmEngine';
-import { FaultInjector } from '@/engine/faultInjector';
 import { getScriptedState, SCRIPT_DURATION } from '@/engine/scenarios/startupScript';
 
 const TICK_MS = 50;
@@ -56,24 +55,12 @@ let timeScale = 5;
 let running = false;
 let scriptMode = true;
 const alarmEngine = new AlarmEngine();
-const faultInjector = new FaultInjector();
 
 let timer: number | null = null;
 let cylAccum = 0;
 let elecAccum = 0;
 let scavAccum = 0;
 let lastPostMs = 0;
-
-// 故障渐变：各缸排温向目标值过渡的进度 0..1（一阶滞后）
-let exhaustFaultProgress = 0;
-const FAULT_RAMP_TAU = 3; // 时间常数（秒）
-
-// 故障级联：排温报警发出后 1 秒，触发中间轴承超温至 68℃
-let cylAlarmFiredAt = -1; // 仿真时间（秒），<0 表示未触发
-let bearingFaultActive = false;
-let autoSlowedDown = false; // 报警后是否已自动降速
-const BEARING_FAULT_TARGET = 68; // ℃（标称 65℃，故障报警值约 68℃）
-const BEARING_FAULT_TAU = 1.2; // 约 1-2 秒升到位
 
 function jitter(amp: number) {
   return (Math.random() - 0.5) * amp;
@@ -86,8 +73,7 @@ function applyScriptedValues() {
   state.telegraph = s.tg;
   state.rpmTarget = s.rpm;
   state.rpm = s.rpm;
-  state.loadPct = s.load;
-  state.power = (s.load / 100) * 42310;
+  stepLoad(state);
   state.lubeOilPressure = s.lube;
 
   // 更新排温基线（不含故障）
@@ -106,28 +92,10 @@ function applyScriptedValues() {
   return true;
 }
 
-/** 把基线（含故障渐变）+ 噪声合成最终排温（每帧重算，不累积） */
-function composeExhaust(dt: number) {
-  const exhFault = state.faults['EXHAUST_TEMP_HIGH'];
-  const faultActive = !!exhFault?.active;
-  const targets: number[] | null = faultActive
-    ? ((exhFault as any).targets ?? null)
-    : null;
-
-  // 故障进度 0->1 一阶滞后（8 缸一起慢慢升到各自目标值）
-  const progressTarget = faultActive ? 1 : 0;
-  exhaustFaultProgress +=
-    ((progressTarget - exhaustFaultProgress) / FAULT_RAMP_TAU) * dt;
-
+/** 把正常排温基线与轻微传感器噪声合成最终显示值（每帧重算，不累积） */
+function composeExhaust() {
   for (let i = 0; i < 8; i++) {
-    const normalVal = baseCylExhaust[i];
-    if (targets) {
-      const faultVal = targets[i];
-      state.cylExhaust[i] =
-        normalVal + (faultVal - normalVal) * exhaustFaultProgress + jitter(0.6);
-    } else {
-      state.cylExhaust[i] = normalVal + jitter(0.5);
-    }
+    state.cylExhaust[i] = baseCylExhaust[i] + jitter(0.5);
   }
   const avg = state.cylExhaust.reduce((s, v) => s + v, 0) / 8;
   state.exhaustManifold = avg - 5 + jitter(0.4);
@@ -141,7 +109,8 @@ function applyOtherJitter() {
     return;
   }
   state.rpm += jitter(0.06);
-  state.loadPct += jitter(0.15);
+  // 转速加入仪表微扰后重新计算负荷，确保负荷表始终跟随主机转速。
+  stepLoad(state);
   state.power += jitter(60);
   state.lubeOilPressure += jitter(0.02);
 }
@@ -171,12 +140,9 @@ function tick() {
       cylAccum = 0;
       // stepExhaustTemp 现在写到 baseCylExhaust，不再写 state.cylExhaust
       stepExhaustTempBase(elapsed);
-      // 轴承故障时滑油温度由故障逻辑接管（升到 71℃），物理层不覆盖
-      // 否则用一阶滞后向负荷对应值靠拢（τ≈20s，冷却平滑）
-      if (!bearingFaultActive) {
-        const target = 35 + (state.loadPct / 100) * 15;
-        state.lubeOilTemp += ((target - state.lubeOilTemp) / 20) * elapsed;
-      }
+      // 用一阶滞后向负荷对应值靠拢（τ≈20s，正常加减车时平滑升降温）
+      const target = 35 + (state.loadPct / 100) * 15;
+      state.lubeOilTemp += ((target - state.lubeOilTemp) / 20) * elapsed;
     }
   } else {
     cylAccum += dt;
@@ -185,36 +151,11 @@ function tick() {
 
   applyOtherJitter();
 
-  // 故障注入（转速达 68 rpm 触发）
-  faultInjector.step(state);
-
-  // ===== 故障保持阶段：报警前锁定"68转 + 100%负荷过载"场景 =====
-  const exhFaultActive = !!state.faults['EXHAUST_TEMP_HIGH']?.active;
-  if (exhFaultActive && !autoSlowedDown) {
-    scriptMode = false; // 停止剧本爬升
-    state.rpm = 68 + jitter(0.3); // 转速锁在海速 85%（68 转）
-    state.rpmTarget = 68;
-    state.loadPct = 100 + jitter(0.3); // 负荷异常拉到 100%（过载）
-    state.power = 42310 + jitter(80);
-  }
-
-  // 用基线 + 故障渐变 + 噪声 合成最终排温（每 tick 重算，不累积）
-  composeExhaust(dt);
+  // 正常排温基线 + 噪声；不再注入排温高故障
+  composeExhaust();
 
   // ===== 中间轴承温度 =====
-  if (bearingFaultActive) {
-    // 故障级联：快速逼近 68℃
-    state.bearingTemp +=
-      ((BEARING_FAULT_TARGET - state.bearingTemp) / BEARING_FAULT_TAU) * dt;
-  } else {
-    stepBearingTemp(state, dt);
-  }
-  state.bearingTemp += jitter(0.05);
-
-  // ===== 滑油温度：轴承超温时随之明显上升至 71℃ =====
-  if (bearingFaultActive) {
-    state.lubeOilTemp += ((71 - state.lubeOilTemp) / 3) * dt + jitter(0.05);
-  }
+  stepBearingTemp(state, dt);
 
   for (let i = 0; i < 8; i++) {
     state.cylPmax[i] = (state.loadPct / 100) * 195 + jitter(1.5);
@@ -231,22 +172,6 @@ function tick() {
   }
 
   const alarms = alarmEngine.check(state, dt);
-
-  // ===== 故障级联 =====
-  if (cylAlarmFiredAt < 0) {
-    if (alarms.some(a => a.id === 'A_CYL_EXH_HIGH')) {
-      cylAlarmFiredAt = state.t;
-      // 排温报警 → 系统自动降速至 DEAD SLOW 微速档位（驾控/集控均生效，方向不变）
-      if (!autoSlowedDown) {
-        autoSlowedDown = true;
-        scriptMode = false;
-        state.telegraph = 'DEAD_SLOW_AHEAD';
-      }
-    }
-  } else if (!bearingFaultActive && state.t - cylAlarmFiredAt >= 1) {
-    // 报警 1 秒后触发中间轴承超温
-    bearingFaultActive = true;
-  }
 
   const nowMs = performance.now();
   const shouldPost = nowMs - lastPostMs >= UI_POST_MS || alarms.length > 0;
@@ -307,15 +232,13 @@ self.onmessage = (e: MessageEvent) => {
     case 'cmd.shutdown': {
       // "停止"按钮：无条件进入"停车冷却模式"
       //   - 车钟切 STOP（不论之前在什么档位）
-      //   - 清除所有故障，温度/转速自然回落到 STOP 对应值
+      //   - 温度/转速自然回落到 STOP 对应值
       //   - worker 继续 tick，UI 可看到温度逐渐下降
       //   - session.running 由 UI 端置为 false（不写历史 + 允许故障诊断）
       state.telegraph = 'STOP';
       state.rpmTarget = 0;
       scriptMode = false; // 退出剧本
-      const exhFault = state.faults['EXHAUST_TEMP_HIGH'];
-      if (exhFault) exhFault.active = false;
-      bearingFaultActive = false;
+      state.faults = {};
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
     }
@@ -325,13 +248,8 @@ self.onmessage = (e: MessageEvent) => {
       baseCylExhaust = Array(8).fill(25);
       baseExhaustManifold = 25;
       cylAccum = elecAccum = scavAccum = 0;
-      exhaustFaultProgress = 0;
-      cylAlarmFiredAt = -1;
-      bearingFaultActive = false;
-      autoSlowedDown = false;
       scriptMode = true;
       alarmEngine.reset();
-      faultInjector.reset();
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
     case 'cmd.telegraph':
@@ -350,12 +268,8 @@ self.onmessage = (e: MessageEvent) => {
       // === 故障修复 = 主机直接进入"STOP 待机"状态（无故障数据，等待人工启动）===
       // 车钟停在 STOP，转速/负荷为 0，关键参数显示正常待机值，无任何报警/故障标记。
       // 集控/驾控模式下都一致：用户后续点档位（手动）或重新点开始（自动）才会再次驱动。
-      faultInjector.clear(state);
+      state.faults = {};
       alarmEngine.reset();
-      exhaustFaultProgress = 0;
-      cylAlarmFiredAt = -1;
-      bearingFaultActive = false;
-      autoSlowedDown = false;
       scriptMode = false; // 不再自动跑剧本
       state.t = 300;
       state.rpm = 0;
