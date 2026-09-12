@@ -53,8 +53,13 @@ const alarms = useAlarmStore();
 const filterLevel = ref(0);
 const kw = ref('');
 
-const filtered = computed(() =>
-  [...alarms.history]
+const filtered = computed(() => {
+  // 展示层再次按故障编号去重，兼容升级前已产生的重复报警数据。
+  const unique = new Map<string, (typeof alarms.history)[number]>();
+  for (const alarm of alarms.history) {
+    if (!unique.has(alarm.id)) unique.set(alarm.id, alarm);
+  }
+  return [...unique.values()]
     .reverse()
     .filter(
       a =>
@@ -62,8 +67,8 @@ const filtered = computed(() =>
         (!kw.value ||
           a.tag.includes(kw.value) ||
           a.message.includes(kw.value))
-    )
-);
+    );
+});
 
 function fmt(ts: number) {
   return new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19);

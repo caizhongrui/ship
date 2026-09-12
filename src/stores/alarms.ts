@@ -8,7 +8,9 @@ export const useAlarmStore = defineStore('alarms', () => {
   const cycleIndex = ref(0); // 多条活跃报警轮播索引（共享）
 
   function push(a: AlarmEvent) {
-    if (!active.value.find(x => x.id === a.id)) active.value.push(a);
+    // 同一轮运行中，每个故障只保留首次报警，避免阈值附近反复越界造成重复记录。
+    if (active.value.some(x => x.id === a.id)) return;
+    active.value.push(a);
     history.value.push(a);
   }
   function clear(id: string) {

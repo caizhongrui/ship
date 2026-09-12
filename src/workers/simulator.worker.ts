@@ -54,6 +54,8 @@ let baseExhaustManifold = 25;
 let timeScale = 5;
 let running = false;
 let scriptMode = true;
+// 初次训练启用两项轴系故障；执行故障修复后保持关闭，直到整轮重置。
+let shaftFaultScenarioEnabled = true;
 const alarmEngine = new AlarmEngine();
 
 let timer: number | null = null;
@@ -155,7 +157,7 @@ function tick() {
   composeExhaust();
 
   // ===== 中间轴承温度 =====
-  stepBearingTemp(state, dt);
+  stepBearingTemp(state, dt, shaftFaultScenarioEnabled);
 
   for (let i = 0; i < 8; i++) {
     state.cylPmax[i] = (state.loadPct / 100) * 195 + jitter(1.5);
@@ -249,6 +251,7 @@ self.onmessage = (e: MessageEvent) => {
       baseExhaustManifold = 25;
       cylAccum = elecAccum = scavAccum = 0;
       scriptMode = true;
+      shaftFaultScenarioEnabled = true;
       alarmEngine.reset();
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
@@ -270,8 +273,11 @@ self.onmessage = (e: MessageEvent) => {
       // 集控/驾控模式下都一致：用户后续点档位（手动）或重新点开始（自动）才会再次驱动。
       state.faults = {};
       alarmEngine.reset();
-      scriptMode = false; // 不再自动跑剧本
-      state.t = 300;
+      shaftFaultScenarioEnabled = false;
+      // 回到启动剧本起点；随后 cmd.setMode 决定驾控自动启动或集控手动切档。
+      // 轴系故障开关保持关闭，所以再次运行全程为正常工况。
+      scriptMode = false;
+      state.t = 0;
       state.rpm = 0;
       state.rpmTarget = 0;
       state.loadPct = 0;

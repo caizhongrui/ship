@@ -36,9 +36,13 @@ function vibrationFromRpm(rpm: number) {
   return 0;
 }
 
-export function stepBearingTemp(state: EngineState, _dt: number) {
+export function stepBearingTemp(
+  state: EngineState,
+  _dt: number,
+  faultScenarioEnabled = true
+) {
   const rpm = Math.abs(state.rpm);
-  if (rpm >= 75) {
+  if (faultScenarioEnabled && rpm >= 75) {
     // 75 rpm 时达到 58℃，随后仅小幅升至 58.2℃，触发温度高报警。
     state.bearingTemp = BEARING_ALARM + Math.min((rpm - 75) / 5, 1) * 0.2;
   } else {
@@ -47,5 +51,9 @@ export function stepBearingTemp(state: EngineState, _dt: number) {
       T_AMBIENT +
       (BEARING_NOMINAL - T_AMBIENT) * Math.min(rpm / 70, 1);
   }
-  state.shaftVibration = vibrationFromRpm(state.rpm);
+  const vibration = vibrationFromRpm(state.rpm);
+  // 故障修复后，满速运行也保持在 0.16 mm 正常范围内。
+  state.shaftVibration = faultScenarioEnabled
+    ? vibration
+    : Math.min(vibration, 0.16);
 }
