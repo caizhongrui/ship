@@ -38,7 +38,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/trend',
     name: 'trend',
-    meta: { title: '曲线查询', icon: 'trend' },
+    meta: { title: '螺旋桨监测', icon: 'trend' },
     component: () => import('@/views/TrendQuery.vue')
   },
   {
