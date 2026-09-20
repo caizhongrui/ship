@@ -124,6 +124,42 @@
               <span>转速 {{ snapshot.rpm.toFixed(1) }} rpm</span>
               <span>负荷 {{ snapshot.loadPct.toFixed(0) }} %</span>
             </div>
+
+            <section v-if="structuredAdvice" class="confirmed-panel">
+              <div class="confirmed-title">根据维修建议确诊为</div>
+              <div v-if="confirmedChecks.length === 0" class="confirmed-empty">
+                请在右侧维修建议中逐项勾选“故障”或“正常”
+              </div>
+              <div v-else class="confirmed-list">
+                <div
+                  v-for="item in confirmedChecks"
+                  :key="item.index"
+                  class="confirmed-item"
+                  :class="item.status"
+                >
+                  <span class="confirmed-index">{{ item.index + 1 }}</span>
+                  <span class="confirmed-text">{{ item.text }}</span>
+                  <span class="confirmed-status">
+                    ✓ {{ item.status === 'fault' ? '故障' : '正常' }}
+                  </span>
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="allChecksCompleted"
+              ref="digitalHumanPanelRef"
+              class="digital-human-panel"
+            >
+              <video
+                ref="digitalHumanVideoRef"
+                class="digital-human-video"
+                src="/digital-human.mp4"
+                preload="auto"
+                playsinline
+                aria-label="数字人维修提示视频"
+              ></video>
+            </section>
           </template>
         </div>
       </div>
@@ -138,6 +174,50 @@
         </div>
         <div class="ind-panel__body ai-body">
           <div v-if="!snapshot" class="empty">等待分析</div>
+          <div v-else-if="structuredAdvice" class="advice advice-structured">
+            <pre class="advice-section">{{ structuredAdvice.analysis }}</pre>
+            <pre class="advice-section conclusion-intro">{{ structuredAdvice.conclusion }}</pre>
+            <pre class="advice-section repair-section">{{ structuredAdvice.repairHeading }}</pre>
+            <div class="diagnosis-check-list">
+              <div
+                v-for="(item, index) in repairChecks"
+                :key="`${snapshot.model}-${index}`"
+                class="diagnosis-check-row"
+                :class="{ locked: !isCheckEnabled(index) }"
+              >
+                <div class="diagnosis-check-label">
+                  <span class="diagnosis-check-text">{{ index + 1 }}. {{ item }}</span>
+                  <span v-if="!isCheckEnabled(index)" class="check-locked-hint">
+                    请先完成第 {{ index }} 项
+                  </span>
+                </div>
+                <div class="diagnosis-check-actions">
+                  <button
+                    type="button"
+                    class="check-choice fault"
+                    :class="{ checked: checkResults[index] === 'fault' }"
+                    :disabled="!isCheckEnabled(index)"
+                    :aria-pressed="checkResults[index] === 'fault'"
+                    @click="setCheckResult(index, 'fault')"
+                  >
+                    <span class="check-box">{{ checkResults[index] === 'fault' ? '✓' : '' }}</span>
+                    <span>故障</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="check-choice normal"
+                    :class="{ checked: checkResults[index] === 'normal' }"
+                    :disabled="!isCheckEnabled(index)"
+                    :aria-pressed="checkResults[index] === 'normal'"
+                    @click="setCheckResult(index, 'normal')"
+                  >
+                    <span class="check-box">{{ checkResults[index] === 'normal' ? '✓' : '' }}</span>
+                    <span>正常</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
           <pre v-else class="advice">{{ typedAdvice }}<span
               v-if="typing"
               class="caret"
@@ -150,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onUnmounted } from 'vue';
+import { computed, nextTick, ref, onUnmounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
@@ -165,7 +245,32 @@ const reportStore = useReportStore();
 
 const modelOptions = ['SFD-LLM', 'Qwen3', 'Deepseek-7B'] as const;
 type ModelName = (typeof modelOptions)[number];
+type CheckStatus = 'fault' | 'normal';
 const selectedModel = ref<ModelName>('SFD-LLM');
+
+const REPAIR_CHECKS_BY_MODEL: Record<ModelName, string[]> = {
+  'SFD-LLM': [
+    '轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配、传动存在异常',
+    '润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题',
+    '传感器故障检查：重点检查传感器连接是否出现异常',
+    '轴系对中检查：复测中间轴法兰处偏移值和曲折值',
+    '基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因'
+  ],
+  Qwen3: [
+    '轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配及传动存在异常',
+    '润滑冷却系统检修：检查轴承滑油的油位、油质、油压，排查冷却管路堵塞及阀门故障，排除润滑冷却异常问题',
+    '轴系对中检查：复测中间轴法兰处的偏移值和曲折值，确认对中精度是否满足要求',
+    '基座结构检测加固：核查轴承底座与加强筋的对位状态，检测基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因',
+    '中间轴承装配检测：复测轴系轴承装配间隙与负荷，排查装配偏差隐患'
+  ],
+  'Deepseek-7B': [
+    '轴系盘车检查：停机后实施手动盘车，若盘车过程中阻力不均或运转平顺性差，即可判定轴系装配或传动环节存在异常',
+    '润滑冷却系统检修：检查轴承滑油油位、油质及油压，排查冷却管路是否存在堵塞、阀门是否工作正常，以排除润滑冷却异常因素',
+    '轴系对中检查：重新测量中间轴法兰处的偏移值和曲折值，核实对中状态',
+    '基座结构检测加固及精度检测：核查轴承底座与加强筋的对位情况，评估基座结构强度；对底座落位于板材空档或受力薄弱区域，进行补焊加固，以提升基座整体刚度，消除结构振动诱因',
+    '中间轴承装配检测：复测轴系轴承的装配间隙与负荷分布，排查装配偏差隐患，确保轴承工作状态符合设计要求'
+  ]
+};
 
 const FINAL_ADVICE_BY_MODEL: Record<ModelName, string> = {
   'SFD-LLM': `一、故障分析
@@ -175,17 +280,16 @@ const FINAL_ADVICE_BY_MODEL: Record<ModelName, string> = {
 确诊为轴系装配、运行负载及基座结构缺陷叠加引发的轴系连锁故障。核心故障如下：
 1.中间轴轴承安装位置故障，轴系对中偏差超标，轴承基座加强筋强度不足、刚度不足、底座安装对位不正造成中间轴承装配间隙不合理；
 2.轴系对中偏差超标：中间轴法兰处偏移值和曲折值超差；
-3.中间轴轴承冷却水系统故障：冷却水温度、流量异常；
+3中间轴轴承冷却水系统故障：冷却水温度、流量异常；
 4.中间轴轴承滑油系统检查：滑油变质、脏堵，不能形成润滑油膜；
 5.传感器链接故障：传感器接线异常、信号传输异常。
 
 三、维修建议
 1.轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配、传动存在异常；
-2.滑冷却系统检修：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题；
+2.润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题；
 3.传感器故障检查：重点检查传感器连接是否出现异常；
 4.轴系对中检查：复测中间轴法兰处偏移值和曲折值；
-5.基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因；
-6.中间轴承装配检测：复测轴系轴承装配间隙与负荷，排查装配偏差隐患。`,
+5.基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因；`,
   Qwen3: `一、故障分析
 本次中间轴振动位移超标与中间轴承温度高报警，属于轴系运行异常引发的连锁故障，可由多项轴系及基座故障共同诱发。核心根源在于轴系装配偏差、运行工况异常及基座结构刚度缺陷三者叠加，导致轴系运转稳定性下降。
 具体表现为：轴系对中偏差、轴承间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座对位偏移等问题，均会引起轴系振动加剧、位移持续超标；同时，异常轴系载荷造成中间轴承摩擦过载、产热加剧，超出冷却润滑系统的散热能力，最终触发轴承温度超限报警。
@@ -264,6 +368,80 @@ interface Snapshot {
 }
 
 const snapshot = ref<Snapshot | null>(null);
+const checkResults = ref<Record<number, CheckStatus>>({});
+const digitalHumanVideoRef = ref<HTMLVideoElement>();
+const digitalHumanPanelRef = ref<HTMLElement>();
+
+const hasInteractiveDiagnosis = computed(() => {
+  const snap = snapshot.value;
+  return !!snap &&
+    ((snap.cylOver && snap.bearingOver) || (snap.bearingOver && snap.vibrationOver));
+});
+
+const repairChecks = computed(() =>
+  hasInteractiveDiagnosis.value && snapshot.value
+    ? REPAIR_CHECKS_BY_MODEL[snapshot.value.model]
+    : []
+);
+
+function splitStructuredAdvice(text: string) {
+  const conclusionIndex = text.indexOf('\n二、');
+  const repairIndex = text.indexOf('\n三、');
+  if (conclusionIndex < 0 || repairIndex < 0 || repairIndex <= conclusionIndex) return null;
+
+  const rawConclusion = text.slice(conclusionIndex + 1, repairIndex).trim();
+  const rawRepair = text.slice(repairIndex + 1).trim();
+  const firstRepairItem = rawRepair.search(/\n1[.、]/);
+  return {
+    analysis: text.slice(0, conclusionIndex).trim(),
+    conclusion: rawConclusion,
+    repairHeading:
+      firstRepairItem >= 0
+        ? rawRepair.slice(0, firstRepairItem).trim()
+        : rawRepair
+  };
+}
+
+const structuredAdvice = computed(() => {
+  if (typing.value || !hasInteractiveDiagnosis.value) return null;
+  return splitStructuredAdvice(typedAdvice.value);
+});
+
+const confirmedChecks = computed(() =>
+  repairChecks.value
+    .map((text, index) => ({ index, text, status: checkResults.value[index] }))
+    .filter((item): item is { index: number; text: string; status: CheckStatus } => !!item.status)
+);
+
+const allChecksCompleted = computed(
+  () =>
+    repairChecks.value.length > 0 &&
+    confirmedChecks.value.length === repairChecks.value.length
+);
+
+async function setCheckResult(index: number, status: CheckStatus) {
+  if (!isCheckEnabled(index)) return;
+  const wasCompleted = allChecksCompleted.value;
+  checkResults.value = { ...checkResults.value, [index]: status };
+
+  if (!wasCompleted && allChecksCompleted.value) {
+    await nextTick();
+    digitalHumanPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    const video = digitalHumanVideoRef.value;
+    if (video) {
+      video.currentTime = 0;
+      try {
+        await video.play();
+      } catch {
+        // 个别系统拦截自动播放时，视频仍保持可见，不影响诊断流程。
+      }
+    }
+  }
+}
+
+function isCheckEnabled(index: number) {
+  return index === 0 || !!checkResults.value[index - 1];
+}
 
 const maxCylTemp = computed(() =>
   t.state.cylExhaust.length ? Math.max(...t.state.cylExhaust) : 0
@@ -311,6 +489,7 @@ function clearAnalysis() {
   typedAdvice.value = '';
   typing.value = false;
   hasAnimatedOnce = false;
+  checkResults.value = {};
 }
 
 function onModelChange() {
@@ -318,6 +497,7 @@ function onModelChange() {
 }
 
 function onAnalyze() {
+  checkResults.value = {};
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -563,6 +743,10 @@ onUnmounted(() => {
   min-width: 0;
   min-height: 0;
 }
+
+.ai-panel > .ind-panel__title {
+  font-size: 14px;
+}
 .empty {
   text-align: center;
   color: var(--c-text-muted);
@@ -640,6 +824,120 @@ onUnmounted(() => {
   letter-spacing: 1px;
 }
 
+.confirmed-panel {
+  margin-top: 16px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--c-bg-panel);
+}
+
+.confirmed-title {
+  padding: 9px 12px;
+  background: var(--c-bg-panel-alt);
+  border-bottom: 1px solid var(--c-border-soft);
+  color: var(--c-text);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.confirmed-empty {
+  padding: 24px 12px;
+  color: var(--c-text-muted);
+  text-align: center;
+  font-size: 12px;
+}
+
+.confirmed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px;
+}
+
+.confirmed-item {
+  min-height: 42px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--c-border-soft);
+  border-left: 4px solid #8d899c;
+  border-radius: 3px;
+  background: var(--c-bg-active);
+}
+
+.confirmed-item.fault {
+  border-left-color: var(--c-accent);
+  background: rgba(199, 59, 59, 0.06);
+}
+
+.confirmed-item.normal {
+  border-left-color: var(--c-ok);
+  background: rgba(122, 180, 124, 0.1);
+}
+
+.confirmed-index {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 3px;
+  background: var(--c-bg-panel-alt);
+  color: var(--c-text-2);
+  font-family: var(--font-num);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.confirmed-text {
+  min-width: 0;
+  color: var(--c-text);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.confirmed-status {
+  justify-self: end;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.confirmed-item.fault .confirmed-status {
+  color: var(--c-accent);
+}
+
+.confirmed-item.normal .confirmed-status {
+  color: #27824d;
+}
+
+.digital-human-panel {
+  margin-top: 12px;
+  min-height: 300px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 4px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.96), rgba(222, 220, 230, 0.78)),
+    var(--c-bg-panel-alt);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.digital-human-video {
+  display: block;
+  width: auto;
+  height: min(380px, 48vh);
+  max-width: 100%;
+  object-fit: contain;
+  background: transparent;
+}
+
 /* === AI 区 === */
 .advice {
   background: var(--c-bg-panel-alt);
@@ -658,12 +956,157 @@ onUnmounted(() => {
   word-break: break-word;
 }
 
+.advice-structured {
+  font-family: var(--font-cn);
+}
+
+.advice-section {
+  margin: 0;
+  white-space: pre-wrap;
+  font: inherit;
+  color: inherit;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.conclusion-intro {
+  margin-top: 24px;
+}
+
+.diagnosis-check-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.diagnosis-check-row {
+  min-height: 46px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px 6px 12px;
+  border: 1px solid rgba(110, 106, 140, 0.22);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.diagnosis-check-row.locked {
+  background: rgba(220, 218, 226, 0.42);
+}
+
+.diagnosis-check-label {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.diagnosis-check-text {
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.diagnosis-check-row.locked .diagnosis-check-text {
+  color: var(--c-text-muted);
+}
+
+.check-locked-hint {
+  color: var(--c-text-muted);
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.diagnosis-check-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.check-choice {
+  height: 31px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 4px;
+  background: var(--c-bg-panel);
+  color: var(--c-text-2);
+  cursor: pointer;
+  font-family: var(--font-cn);
+  font-size: 12px;
+  transition: border-color 0.14s, background 0.14s, color 0.14s, transform 0.14s;
+}
+
+.check-choice:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.check-choice:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.check-box {
+  width: 17px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  border: 2px solid currentColor;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.check-choice.fault {
+  color: var(--c-accent);
+}
+
+.check-choice.normal {
+  color: #31905a;
+}
+
+.check-choice.fault.checked {
+  border-color: var(--c-accent);
+  background: rgba(199, 59, 59, 0.1);
+  color: #a82626;
+  font-weight: 700;
+}
+
+.check-choice.normal.checked {
+  border-color: var(--c-ok);
+  background: rgba(122, 180, 124, 0.16);
+  color: #257848;
+  font-weight: 700;
+}
+
+.check-choice.fault.checked .check-box {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #fff;
+}
+
+.check-choice.normal.checked .check-box {
+  background: var(--c-ok);
+  border-color: var(--c-ok);
+  color: #fff;
+}
+
+.repair-section {
+  margin-top: 24px;
+}
+
 /* AI 标签 */
 .ai-tag {
   display: inline-block;
   background: linear-gradient(135deg, #4a4660, var(--c-accent));
   color: #fff;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   padding: 1px 6px;
   border-radius: 8px;

@@ -7,7 +7,8 @@
         <div class="ind-panel__body shaft-body">
           <div class="shaft-wrap">
             <img class="shaft-img" src="/zhouxi.jpg" alt="shaft system" />
-            <!-- 中间轴承温度数值（填入底图蓝色温度框内）-->
+            <!-- 使用统一的覆盖文字，避免底图文字随图片缩放后字号不一致 -->
+            <div class="anno mb-temp-label">中间轴承温度</div>
             <div class="anno mb-temp num" :class="{ fault: bearingHigh }">
               {{ t.state.bearingTemp.toFixed(1) }}
             </div>
@@ -140,22 +141,47 @@ const trendSeries = computed(() => [
   pointer-events: none;
   transform: translate(-50%, -50%);
   text-align: center;
+  font-family: var(--font-cn);
+  line-height: 1.35;
 }
 
-/* 中间轴承温度 — 填入"中间轴承温度"文字右侧的空白区域（℃ 内置） */
-.anno.mb-temp {
-  left: 82%;
-  top: 45.5%;
-  min-width: 56px;
-  padding: 1px 6px;
+/* 两个数值框使用完全一致的字体、尺寸和颜色 */
+.anno.mb-temp,
+.anno.shaft-vib-value {
+  width: 68px;
+  box-sizing: border-box;
+  padding: 3px 7px;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 700;
   color: #ffffff;
   background: linear-gradient(180deg, #2c5db5 0%, #1e4a99 100%);
   border: 1px solid #1e4a99;
   border-radius: 3px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+
+.anno.mb-temp {
+  /* 紧邻底图温度标题，控制宽度后正好落在标题与滑油管路之间 */
+  left: 81.8%;
+  top: 45.5%;
+}
+.anno.mb-temp-label,
+.anno.shaft-vib-label {
+  font-size: 17px;
+  font-weight: 700;
+  color: #0b4f82;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.anno.mb-temp-label {
+  /* 覆盖底图自带标题，并让右边缘紧邻温度数值框 */
+  left: 77.7%;
+  top: 45.5%;
+  padding: 2px 6px;
+  transform: translate(-100%, -50%);
+  background: #ffffff;
 }
 .anno.mb-temp::after {
   content: ' ℃';
@@ -171,26 +197,13 @@ const trendSeries = computed(() => [
   animation: pulseAnno 1.2s infinite;
 }
 .anno.shaft-vib-label {
-  left: 62%;
-  top: 80%;
-  font-size: 14px;
-  font-weight: 800;
-  color: #1e4a99;
-  letter-spacing: 0.5px;
-  white-space: nowrap;
+  /* 放在底部管路右侧、轴承左侧的留白区，避免覆盖设备 */
+  left: 70%;
+  top: 79%;
 }
 .anno.shaft-vib-value {
-  left: 74%;
-  top: 80%;
-  min-width: 70px;
-  padding: 1px 6px;
-  font-size: 14px;
-  font-weight: 800;
-  color: #ffffff;
-  background: linear-gradient(180deg, #2c5db5 0%, #1e4a99 100%);
-  border: 1px solid #1e4a99;
-  border-radius: 3px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  left: 80%;
+  top: 79%;
 }
 .anno.shaft-vib-value::after {
   content: ' mm';
