@@ -9,7 +9,7 @@ function ensure(): HTMLAudioElement {
   if (!audio) {
     audio = new Audio('/engine-sound.mp3');
     audio.loop = true;
-    audio.volume = 0.95;
+    audio.volume = 1;
     audio.preload = 'auto';
 
     // 兜底循环：mp3 文件末尾静音 padding 可能让原生 loop 失效
@@ -29,8 +29,9 @@ export function updateEngineSound(running: boolean, rpm: number) {
   const shouldPlay = running && Math.abs(rpm) > 0.5;
   wantPlaying = shouldPlay;
   if (shouldPlay) {
-    a.volume = 0.95;
-    a.play().catch(() => {});
+    a.volume = 1;
+    // 遥测数据持续刷新时不要重复调用 play，保证发动机声平稳连续。
+    if (a.paused) a.play().catch(() => {});
   } else {
     if (!a.paused) a.pause();
   }

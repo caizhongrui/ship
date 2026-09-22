@@ -144,20 +144,29 @@
                   </span>
                 </div>
               </div>
+              <div
+                v-if="finalDiagnosisStatus"
+                class="final-diagnosis"
+                :class="finalDiagnosisStatus"
+              >
+                诊断结果：{{ finalDiagnosisStatus === 'fault' ? '确诊为故障' : '该项检查正常' }}
+              </div>
             </section>
 
             <section
-              v-if="allChecksCompleted"
+              v-if="showDiagnosisVideo"
               ref="digitalHumanPanelRef"
               class="digital-human-panel"
             >
               <video
                 ref="digitalHumanVideoRef"
                 class="digital-human-video"
-                src="/digital-human.mp4"
+                :class="videoStage"
+                :src="videoStage === 'digital-human' ? '/digital-human.mp4?v=2' : '/maintenance-advice.mp4'"
                 preload="auto"
                 playsinline
-                aria-label="数字人维修提示视频"
+                :aria-label="videoStage === 'digital-human' ? '数字人诊断视频' : '维修建议动画'"
+                @ended="onDiagnosisVideoEnded"
               ></video>
             </section>
           </template>
@@ -190,13 +199,28 @@
                   <span v-if="!isCheckEnabled(index)" class="check-locked-hint">
                     请先完成第 {{ index }} 项
                   </span>
+                  <span
+                    v-else-if="requiresPropellerCamera(index) && !propellerCameraVisited"
+                    class="check-locked-hint camera-hint"
+                  >
+                    请先切换到螺旋桨摄像头完成检查
+                  </span>
                 </div>
                 <div class="diagnosis-check-actions">
+                  <button
+                    v-if="requiresPropellerCamera(index)"
+                    type="button"
+                    class="camera-check-btn"
+                    :disabled="!isCheckEnabled(index)"
+                    @click="openPropellerCamera"
+                  >
+                    ▣ 摄像头检查
+                  </button>
                   <button
                     type="button"
                     class="check-choice fault"
                     :class="{ checked: checkResults[index] === 'fault' }"
-                    :disabled="!isCheckEnabled(index)"
+                    :disabled="!isChoiceEnabled(index)"
                     :aria-pressed="checkResults[index] === 'fault'"
                     @click="setCheckResult(index, 'fault')"
                   >
@@ -207,7 +231,7 @@
                     type="button"
                     class="check-choice normal"
                     :class="{ checked: checkResults[index] === 'normal' }"
-                    :disabled="!isCheckEnabled(index)"
+                    :disabled="!isChoiceEnabled(index)"
                     :aria-pressed="checkResults[index] === 'normal'"
                     @click="setCheckResult(index, 'normal')"
                   >
@@ -231,6 +255,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, ref, onUnmounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
@@ -238,23 +263,27 @@ import { useAlarmStore } from '@/stores/alarms';
 import { useReportStore } from '@/stores/report';
 import { simClearFault, simSetMode } from '@/engine/simRuntime';
 
+defineOptions({ name: 'FaultDiagnosis' });
+
 const t = useTelemetryStore();
 const session = useSessionStore();
 const alarms = useAlarmStore();
 const reportStore = useReportStore();
+const router = useRouter();
 
 const modelOptions = ['SFD-LLM', 'Qwen3', 'Deepseek-7B'] as const;
 type ModelName = (typeof modelOptions)[number];
 type CheckStatus = 'fault' | 'normal';
+type VideoStage = 'hidden' | 'digital-human' | 'maintenance';
 const selectedModel = ref<ModelName>('SFD-LLM');
 
 const REPAIR_CHECKS_BY_MODEL: Record<ModelName, string[]> = {
   'SFD-LLM': [
-    '轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配、传动存在异常',
-    '润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题',
-    '传感器故障检查：重点检查传感器连接是否出现异常',
-    '轴系对中检查：复测中间轴法兰处偏移值和曲折值',
-    '基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因'
+    '轴系盘车检查：停机后手动盘车，检查运转平顺性',
+    '润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障等问题',
+    '轴系对中检查：检查中间轴法兰螺栓马克标记，检查法兰偏移',
+    '检查螺旋桨状态：检查螺旋桨是否有缠绕物或其他异常情况',
+    '基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度'
   ],
   Qwen3: [
     '轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配及传动存在异常',
@@ -285,11 +314,11 @@ const FINAL_ADVICE_BY_MODEL: Record<ModelName, string> = {
 5.传感器链接故障：传感器接线异常、信号传输异常。
 
 三、维修建议
-1.轴系盘车检查：停机后手动盘车，若盘车阻力不均、运转平顺性差，可确认轴系装配、传动存在异常；
-2.润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障，排除润滑冷却异常问题；
-3.传感器故障检查：重点检查传感器连接是否出现异常；
-4.轴系对中检查：复测中间轴法兰处偏移值和曲折值；
-5.基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度，对底座落于板材空档、受力薄弱区域进行补焊加固，提升基座整体刚度，消除结构振动诱因；`,
+1.轴系盘车检查：停机后手动盘车，检查运转平顺性；
+2.润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障等问题；
+3.轴系对中检查：检查中间轴法兰螺栓马克标记，检查法兰偏移；
+4.检查螺旋桨状态：检查螺旋桨是否有缠绕物或其他异常情况；
+5.基座结构检测加固及精度检测：核查轴承底座与加强筋对位状态，检查基座结构强度；`,
   Qwen3: `一、故障分析
 本次中间轴振动位移超标与中间轴承温度高报警，属于轴系运行异常引发的连锁故障，可由多项轴系及基座故障共同诱发。核心根源在于轴系装配偏差、运行工况异常及基座结构刚度缺陷三者叠加，导致轴系运转稳定性下降。
 具体表现为：轴系对中偏差、轴承间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座对位偏移等问题，均会引起轴系振动加剧、位移持续超标；同时，异常轴系载荷造成中间轴承摩擦过载、产热加剧，超出冷却润滑系统的散热能力，最终触发轴承温度超限报警。
@@ -371,6 +400,8 @@ const snapshot = ref<Snapshot | null>(null);
 const checkResults = ref<Record<number, CheckStatus>>({});
 const digitalHumanVideoRef = ref<HTMLVideoElement>();
 const digitalHumanPanelRef = ref<HTMLElement>();
+const propellerCameraVisited = ref(false);
+const videoStage = ref<VideoStage>('hidden');
 
 const hasInteractiveDiagnosis = computed(() => {
   const snap = snapshot.value;
@@ -419,28 +450,80 @@ const allChecksCompleted = computed(
     confirmedChecks.value.length === repairChecks.value.length
 );
 
+const finalDiagnosisStatus = computed(() => {
+  const lastIndex = repairChecks.value.length - 1;
+  return lastIndex >= 0 ? checkResults.value[lastIndex] : undefined;
+});
+
+const showDiagnosisVideo = computed(
+  () =>
+    allChecksCompleted.value &&
+    finalDiagnosisStatus.value === 'fault' &&
+    videoStage.value !== 'hidden'
+);
+
 async function setCheckResult(index: number, status: CheckStatus) {
-  if (!isCheckEnabled(index)) return;
-  const wasCompleted = allChecksCompleted.value;
+  if (!isChoiceEnabled(index)) return;
   checkResults.value = { ...checkResults.value, [index]: status };
 
-  if (!wasCompleted && allChecksCompleted.value) {
-    await nextTick();
-    digitalHumanPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-    const video = digitalHumanVideoRef.value;
-    if (video) {
-      video.currentTime = 0;
-      try {
-        await video.play();
-      } catch {
-        // 个别系统拦截自动播放时，视频仍保持可见，不影响诊断流程。
-      }
-    }
+  if (index !== repairChecks.value.length - 1) return;
+  if (status === 'fault') {
+    await startDiagnosisVideoSequence();
+  } else {
+    stopDiagnosisVideos();
   }
 }
 
 function isCheckEnabled(index: number) {
   return index === 0 || !!checkResults.value[index - 1];
+}
+
+function requiresPropellerCamera(index: number) {
+  return snapshot.value?.model === 'SFD-LLM' && index === 3;
+}
+
+function isChoiceEnabled(index: number) {
+  return isCheckEnabled(index) &&
+    (!requiresPropellerCamera(index) || propellerCameraVisited.value);
+}
+
+async function openPropellerCamera() {
+  propellerCameraVisited.value = true;
+  await router.push('/trend');
+}
+
+function stopDiagnosisVideos() {
+  const video = digitalHumanVideoRef.value;
+  if (video) {
+    video.pause();
+    video.currentTime = 0;
+  }
+  videoStage.value = 'hidden';
+}
+
+async function playCurrentDiagnosisVideo() {
+  await nextTick();
+  digitalHumanPanelRef.value?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  const video = digitalHumanVideoRef.value;
+  if (!video) return;
+  video.load();
+  video.currentTime = 0;
+  try {
+    await video.play();
+  } catch {
+    // Tauri WebView 通常允许由点击触发的有声播放；失败时仍保留视频首帧。
+  }
+}
+
+async function startDiagnosisVideoSequence() {
+  videoStage.value = 'digital-human';
+  await playCurrentDiagnosisVideo();
+}
+
+async function onDiagnosisVideoEnded() {
+  if (videoStage.value !== 'digital-human') return;
+  videoStage.value = 'maintenance';
+  await playCurrentDiagnosisVideo();
 }
 
 const maxCylTemp = computed(() =>
@@ -490,6 +573,8 @@ function clearAnalysis() {
   typing.value = false;
   hasAnimatedOnce = false;
   checkResults.value = {};
+  propellerCameraVisited.value = false;
+  stopDiagnosisVideos();
 }
 
 function onModelChange() {
@@ -498,6 +583,8 @@ function onModelChange() {
 
 function onAnalyze() {
   checkResults.value = {};
+  propellerCameraVisited.value = false;
+  stopDiagnosisVideos();
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, '0');
 
@@ -629,6 +716,7 @@ async function onRepair() {
 
 onUnmounted(() => {
   if (typeTimer) clearInterval(typeTimer);
+  stopDiagnosisVideos();
 });
 </script>
 
@@ -914,6 +1002,27 @@ onUnmounted(() => {
   color: #27824d;
 }
 
+.final-diagnosis {
+  margin: 0 10px 10px;
+  padding: 9px 12px;
+  border-left: 4px solid #8d899c;
+  border-radius: 3px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.final-diagnosis.fault {
+  border-left-color: var(--c-accent);
+  background: rgba(199, 59, 59, 0.08);
+  color: var(--c-accent);
+}
+
+.final-diagnosis.normal {
+  border-left-color: var(--c-ok);
+  background: rgba(122, 180, 124, 0.12);
+  color: #27824d;
+}
+
 .digital-human-panel {
   margin-top: 12px;
   min-height: 300px;
@@ -931,11 +1040,21 @@ onUnmounted(() => {
 
 .digital-human-video {
   display: block;
-  width: auto;
-  height: min(380px, 48vh);
   max-width: 100%;
   object-fit: contain;
-  background: transparent;
+  background: #000;
+}
+
+.digital-human-video.digital-human {
+  width: auto;
+  height: min(430px, 52vh);
+}
+
+.digital-human-video.maintenance {
+  width: 100%;
+  height: auto;
+  max-height: min(380px, 48vh);
+  aspect-ratio: 16 / 9;
 }
 
 /* === AI 区 === */
@@ -1019,10 +1138,37 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 
+.check-locked-hint.camera-hint {
+  color: #9a6a00;
+}
+
 .diagnosis-check-actions {
   display: flex;
   align-items: center;
   gap: 7px;
+}
+
+.camera-check-btn {
+  height: 31px;
+  padding: 0 9px;
+  border: 1px solid #416d9f;
+  border-radius: 4px;
+  background: rgba(65, 109, 159, 0.1);
+  color: #315e91;
+  cursor: pointer;
+  font-family: var(--font-cn);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.camera-check-btn:hover:not(:disabled) {
+  background: rgba(65, 109, 159, 0.18);
+}
+
+.camera-check-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
 }
 
 .check-choice {

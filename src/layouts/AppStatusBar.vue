@@ -27,7 +27,7 @@
         系统正常
       </template>
     </span>
-    <span class="seg">v0.1.0</span>
+    <span class="seg">v2.0.5</span>
   </footer>
 </template>
 

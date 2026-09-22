@@ -44,7 +44,7 @@
         </div>
       </div>
 
-      <div class="footer">v0.1.0 © 天津海运 | 青岛欧盛</div>
+      <div class="footer">v2.0.5</div>
     </div>
   </div>
 </template>

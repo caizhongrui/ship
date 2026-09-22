@@ -40,8 +40,8 @@ npm run tauri:build
 - **手动触发**：进入仓库 Actions → "Build Windows Installer" → Run workflow
 - **打 tag 发布**：
   ```bash
-  git tag v0.1.0
-  git push origin v0.1.0
+  git tag v2.0.5
+  git push origin v2.0.5
   ```
   CI 完成后会自动创建 GitHub Release，附带 NSIS `.exe` 和 MSI `.msi` 两个安装包。
 

@@ -25,7 +25,9 @@
       <AppSidebar />
       <main class="app-main">
         <router-view v-slot="{ Component }">
-          <component :is="Component" />
+          <KeepAlive include="FaultDiagnosis">
+            <component :is="Component" />
+          </KeepAlive>
         </router-view>
       </main>
     </div>
