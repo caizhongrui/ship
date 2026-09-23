@@ -24,6 +24,7 @@ declare module 'vue' {
     StatusDot: typeof import('./src/components/industrial/StatusDot.vue')['default']
     TelegraphLever: typeof import('./src/components/controls/TelegraphLever.vue')['default']
     TrendChart: typeof import('./src/components/industrial/TrendChart.vue')['default']
+    UsbCameraCircle: typeof import('./src/components/industrial/UsbCameraCircle.vue')['default']
     ValueDisplay: typeof import('./src/components/industrial/ValueDisplay.vue')['default']
   }
 }

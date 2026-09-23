@@ -10,7 +10,7 @@
         <StatusCard title="空 冷 器" :items="airCoolerItems" />
       </div>
 
-      <!-- 中央列：4 仪表 + 8 缸柱图 -->
+      <!-- 中央列：主机仪表 + 动力轴系综合监测 -->
       <div class="col col-center">
         <div class="ind-panel gauges-panel">
           <div class="ind-panel__body row-gauges">
@@ -49,17 +49,54 @@
           </div>
         </div>
 
-        <div class="ind-panel cyl-bar">
-          <div class="ind-panel__title">各 缸 排 气 温 度（℃）</div>
-          <div class="ind-panel__body cyl-body">
-            <BarChart8Cyl
-              :values="t.state.cylExhaust"
-              :min="0"
-              :max="500"
-              :warn="450"
-              :danger="450"
-              :threshold="450"
-            />
+        <div class="ind-panel powertrain-panel">
+          <div class="ind-panel__title">船 舶 动 力 系 统 — 轴 系 故 障 诊 断</div>
+          <div class="ind-panel__body powertrain-body">
+            <section class="exhaust-strip" aria-label="各缸排气温度数字表">
+              <div class="exhaust-strip__title">各缸排气温度</div>
+              <div class="exhaust-readings">
+                <div
+                  v-for="(value, index) in t.state.cylExhaust"
+                  :key="index"
+                  class="exhaust-reading"
+                  :class="{ fault: value >= 450 }"
+                >
+                  <span>{{ index + 1 }}#</span>
+                  <strong class="num">{{ value.toFixed(1) }}</strong>
+                  <em>℃</em>
+                </div>
+              </div>
+            </section>
+
+            <section class="powertrain-stage" aria-label="船舶主机轴系和螺旋桨监测">
+              <div class="powertrain-composition">
+                <div class="monitor-circles">
+                  <div class="sensor-card bearing" :class="{ fault: bearingHigh }">
+                    <span>中间轴承温度</span>
+                    <strong class="num">{{ t.state.bearingTemp.toFixed(1) }}</strong>
+                    <em>℃</em>
+                  </div>
+
+                  <div class="sensor-card vibration" :class="{ fault: vibrationHigh }">
+                    <span>中间轴振动位移</span>
+                    <strong class="num">{{ t.state.shaftVibration.toFixed(2) }}</strong>
+                    <em>mm</em>
+                  </div>
+
+                  <div class="camera-monitor">
+                    <div class="camera-circle">
+                      <UsbCameraCircle />
+                    </div>
+                  </div>
+                </div>
+
+                <img
+                  class="powertrain-img"
+                  src="/powertrain.jpg"
+                  alt="船舶柴油机、轴系和螺旋桨示意图"
+                />
+              </div>
+            </section>
           </div>
         </div>
       </div>
@@ -79,12 +116,14 @@ import { computed } from 'vue';
 import CircleGauge from '@/components/industrial/CircleGauge.vue';
 import RpmGauge from '@/components/industrial/RpmGauge.vue';
 import StatusCard, { type StatusItem } from '@/components/industrial/StatusCard.vue';
-import BarChart8Cyl from '@/components/industrial/BarChart8Cyl.vue';
+import UsbCameraCircle from '@/components/industrial/UsbCameraCircle.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
 import { useSessionStore } from '@/stores/session';
 
 const t = useTelemetryStore();
 const session = useSessionStore();
+const bearingHigh = computed(() => t.state.bearingTemp >= 58);
+const vibrationHigh = computed(() => t.state.shaftVibration > 0.2);
 
 // 启动空气压力：启动前 28 bar（瓶压），启动后 23 bar（消耗后）
 const startAirPressure = computed(() => {
@@ -179,6 +218,26 @@ const safetyItems = computed<StatusItem[]>(() => [
   flex: 1 1 0;
   min-height: 0;
 }
+.col-left :deep(.status-card:nth-child(1)),
+.col-left :deep(.status-card:nth-child(3)),
+.col-left :deep(.status-card:nth-child(5)) {
+  flex-grow: 4;
+}
+.col-left :deep(.status-card:nth-child(2)) {
+  flex-grow: 5;
+}
+.col-left :deep(.status-card:nth-child(4)) {
+  flex-grow: 7;
+}
+.col-right :deep(.status-card:nth-child(1)) {
+  flex-grow: 5;
+}
+.col-right :deep(.status-card:nth-child(2)) {
+  flex-grow: 11;
+}
+.col-right :deep(.status-card:nth-child(3)) {
+  flex-grow: 7;
+}
 .col-center {
   min-width: 0;
 }
@@ -193,11 +252,266 @@ const safetyItems = computed<StatusItem[]>(() => [
   height: 100%;
   padding: 8px;
 }
-.cyl-bar {
+.powertrain-panel {
   flex: 1;
   min-height: 0;
 }
-.cyl-body {
-  padding: 0;
+
+.powertrain-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px 6px;
+  overflow: hidden;
+}
+
+.exhaust-strip {
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+  padding: 5px 7px 7px;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 4px;
+  background: var(--c-bg-panel-alt);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.exhaust-strip__title {
+  margin-bottom: 4px;
+  color: var(--c-text-2);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-align: center;
+}
+
+.exhaust-readings {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.exhaust-reading {
+  min-width: 0;
+  height: 39px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 3px;
+  padding: 0 7px;
+  border: 1px solid #7c86a2;
+  border-radius: 4px;
+  background: linear-gradient(180deg, #465e91 0%, #354c7f 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 1px 3px rgba(42, 45, 66, 0.2);
+}
+
+.exhaust-reading span {
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.exhaust-reading strong {
+  overflow: hidden;
+  font-size: clamp(13px, 1.2vw, 17px);
+  line-height: 1;
+  text-align: right;
+  text-overflow: clip;
+}
+
+.exhaust-reading em {
+  font-size: 9px;
+  font-style: normal;
+  opacity: 0.85;
+}
+
+.exhaust-reading.fault {
+  border-color: #b91f1f;
+  background: linear-gradient(180deg, #db3838 0%, #b91f1f 100%);
+  box-shadow: 0 0 8px rgba(199, 59, 59, 0.48);
+}
+
+.powertrain-stage {
+  --monitor-circle-size: clamp(82px, 7.5vw, 112px);
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin-top: 5px;
+  overflow: hidden;
+  border: 1px solid var(--c-border-soft);
+  border-radius: 4px;
+  background: #dfdfdf;
+}
+
+.powertrain-composition {
+  position: absolute;
+  right: 1.5%;
+  bottom: 2%;
+  left: 1.5%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(8px, 1vh, 14px);
+}
+
+.powertrain-img {
+  position: relative;
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  filter: saturate(0.94) contrast(1.03);
+}
+
+.monitor-circles {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: var(--monitor-circle-size);
+}
+
+.sensor-card {
+  position: absolute;
+  top: 0;
+  z-index: 2;
+  width: var(--monitor-circle-size);
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 8px;
+  transform: translateX(-50%);
+  border: 3px solid #68779d;
+  border-radius: 50%;
+  background: rgba(247, 247, 249, 0.94);
+  color: var(--c-text);
+  box-shadow: 0 5px 14px rgba(45, 42, 63, 0.14);
+}
+
+.sensor-card span {
+  margin-bottom: 2px;
+  color: var(--c-text);
+  font-size: clamp(10px, 0.85vw, 12px);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.sensor-card strong {
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.1;
+}
+
+.sensor-card em {
+  color: var(--c-text);
+  font-size: 9px;
+  font-style: normal;
+}
+
+.sensor-card.fault {
+  color: var(--c-accent);
+  border-color: var(--c-accent);
+  box-shadow: 0 0 12px rgba(190, 45, 45, 0.32);
+}
+
+.sensor-card.bearing {
+  left: 43%;
+}
+
+.sensor-card.vibration {
+  left: 60%;
+}
+
+.camera-monitor {
+  position: absolute;
+  top: 0;
+  left: 87%;
+  width: var(--monitor-circle-size);
+  transform: translateX(-50%);
+}
+
+.camera-circle {
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+@media (max-width: 1360px), (max-height: 820px) {
+  .col-left :deep(.ind-panel__title),
+  .col-right :deep(.ind-panel__title) {
+    padding: 3px 6px;
+    font-size: 11px;
+  }
+
+  .col-left :deep(.status-body),
+  .col-right :deep(.status-body) {
+    padding: 4px 8px;
+    gap: 2px;
+  }
+
+  .col-left :deep(.status-row),
+  .col-right :deep(.status-row) {
+    height: 20px;
+    padding-bottom: 2px;
+    font-size: 10px;
+  }
+
+  .gauges-panel {
+    height: 216px;
+  }
+
+  .row-gauges {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .row-gauges :deep(.rpm-gauge),
+  .row-gauges :deep(.circle-gauge) {
+    margin-right: -15px;
+    margin-left: -15px;
+    transform: scale(0.82);
+  }
+
+  .sensor-card strong {
+    font-size: 20px;
+  }
+
+  .powertrain-stage {
+    --monitor-circle-size: 84px;
+  }
+
+  .exhaust-reading {
+    height: 35px;
+    padding: 0 5px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: 180px minmax(0, 1fr) 180px;
+  }
+
+  .row-gauges :deep(.rpm-gauge),
+  .row-gauges :deep(.circle-gauge) {
+    margin-right: -25px;
+    margin-left: -25px;
+    transform: scale(0.68);
+  }
+
+  .powertrain-stage {
+    --monitor-circle-size: 72px;
+  }
+
+  .sensor-card span {
+    font-size: 9px;
+    letter-spacing: -0.3px;
+  }
+
+  .sensor-card strong {
+    font-size: 18px;
+  }
 }
 </style>

@@ -183,6 +183,15 @@ const trendSeries = computed(() => [
   transform: translate(-100%, -50%);
   background: #ffffff;
 }
+.anno.mb-temp-label::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 44px;
+  height: 100%;
+  background: #ffffff;
+}
 .anno.mb-temp::after {
   content: ' ℃';
   font-size: 11px;
