@@ -71,6 +71,12 @@
             <section class="powertrain-stage" aria-label="船舶主机轴系和螺旋桨监测">
               <div class="powertrain-composition">
                 <div class="monitor-circles">
+                  <div class="sensor-card coolant">
+                    <span>冷却水出口温度</span>
+                    <strong class="num">{{ t.state.coolingWaterOutletTemp.toFixed(1) }}</strong>
+                    <em>℃</em>
+                  </div>
+
                   <div class="sensor-card bearing" :class="{ fault: bearingHigh }">
                     <span>中间轴承温度</span>
                     <strong class="num">{{ t.state.bearingTemp.toFixed(1) }}</strong>
@@ -334,7 +340,8 @@ const safetyItems = computed<StatusItem[]>(() => [
 }
 
 .powertrain-stage {
-  --monitor-circle-size: clamp(82px, 7.5vw, 112px);
+  --monitor-circle-size: clamp(108px, 8.5vw, 136px);
+  --camera-circle-size: clamp(136px, 10.8vw, 172px);
   position: relative;
   flex: 1;
   min-height: 0;
@@ -370,12 +377,12 @@ const safetyItems = computed<StatusItem[]>(() => [
   position: relative;
   z-index: 2;
   width: 100%;
-  height: var(--monitor-circle-size);
+  height: var(--camera-circle-size);
 }
 
 .sensor-card {
   position: absolute;
-  top: 0;
+  top: 50%;
   z-index: 2;
   width: var(--monitor-circle-size);
   aspect-ratio: 1;
@@ -385,7 +392,7 @@ const safetyItems = computed<StatusItem[]>(() => [
   align-items: center;
   justify-content: center;
   padding: 4px 8px;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
   border: 3px solid #68779d;
   border-radius: 50%;
   background: rgba(247, 247, 249, 0.94);
@@ -396,19 +403,19 @@ const safetyItems = computed<StatusItem[]>(() => [
 .sensor-card span {
   margin-bottom: 2px;
   color: var(--c-text);
-  font-size: clamp(10px, 0.85vw, 12px);
+  font-size: clamp(11px, 0.85vw, 13px);
   font-weight: 700;
   white-space: nowrap;
 }
 
 .sensor-card strong {
-  font-size: clamp(20px, 2vw, 28px);
+  font-size: clamp(23px, 2vw, 32px);
   line-height: 1.1;
 }
 
 .sensor-card em {
   color: var(--c-text);
-  font-size: 9px;
+  font-size: 10px;
   font-style: normal;
 }
 
@@ -418,20 +425,24 @@ const safetyItems = computed<StatusItem[]>(() => [
   box-shadow: 0 0 12px rgba(190, 45, 45, 0.32);
 }
 
+.sensor-card.coolant {
+  left: 17%;
+}
+
 .sensor-card.bearing {
-  left: 43%;
+  left: 40.333%;
 }
 
 .sensor-card.vibration {
-  left: 60%;
+  left: 63.667%;
 }
 
 .camera-monitor {
   position: absolute;
-  top: 0;
+  top: 50%;
   left: 87%;
-  width: var(--monitor-circle-size);
-  transform: translateX(-50%);
+  width: var(--camera-circle-size);
+  transform: translate(-50%, -50%);
 }
 
 .camera-circle {
@@ -476,11 +487,12 @@ const safetyItems = computed<StatusItem[]>(() => [
   }
 
   .sensor-card strong {
-    font-size: 20px;
+    font-size: 22px;
   }
 
   .powertrain-stage {
-    --monitor-circle-size: 84px;
+    --monitor-circle-size: 104px;
+    --camera-circle-size: 132px;
   }
 
   .exhaust-reading {
@@ -502,16 +514,33 @@ const safetyItems = computed<StatusItem[]>(() => [
   }
 
   .powertrain-stage {
-    --monitor-circle-size: 72px;
+    --monitor-circle-size: 94px;
+    --camera-circle-size: 121px;
+  }
+
+  .sensor-card.coolant {
+    left: 12%;
+  }
+
+  .sensor-card.bearing {
+    left: 36%;
+  }
+
+  .sensor-card.vibration {
+    left: 60%;
+  }
+
+  .camera-monitor {
+    left: 86%;
   }
 
   .sensor-card span {
-    font-size: 9px;
+    font-size: 10px;
     letter-spacing: -0.3px;
   }
 
   .sensor-card strong {
-    font-size: 18px;
+    font-size: 20px;
   }
 }
 </style>

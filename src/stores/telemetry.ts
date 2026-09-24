@@ -18,6 +18,7 @@ function emptyState(): EngineState {
     loadPct: 0,
     power: 0,
     scavPressure: 0,
+    coolingWaterOutletTemp: 60,
     cylExhaust: Array(8).fill(25),
     exhaustManifold: 25,
     cylPmax: Array(8).fill(0),

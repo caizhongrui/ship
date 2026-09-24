@@ -14,6 +14,7 @@ import { stepLoad } from '@/engine/models/load';
 import { stepExhaustTemp } from '@/engine/models/exhaustTemp';
 import { stepScavPressure } from '@/engine/models/scavPressure';
 import { stepBearingTemp } from '@/engine/models/bearingTemp';
+import { stepCoolingWaterOutletTemp } from '@/engine/models/coolingWaterTemp';
 import { stepElectric } from '@/engine/models/electric';
 import { AlarmEngine } from '@/engine/alarmEngine';
 import { getScriptedState, SCRIPT_DURATION } from '@/engine/scenarios/startupScript';
@@ -30,6 +31,7 @@ function emptyState(): EngineState {
     loadPct: 0,
     power: 0,
     scavPressure: 0,
+    coolingWaterOutletTemp: 60,
     cylExhaust: Array(8).fill(25),
     exhaustManifold: 25,
     cylPmax: Array(8).fill(0),
@@ -158,6 +160,7 @@ function tick() {
 
   // ===== 中间轴承温度 =====
   stepBearingTemp(state, dt, shaftFaultScenarioEnabled);
+  stepCoolingWaterOutletTemp(state);
 
   for (let i = 0; i < 8; i++) {
     state.cylPmax[i] = (state.loadPct / 100) * 195 + jitter(1.5);
@@ -283,6 +286,7 @@ self.onmessage = (e: MessageEvent) => {
       state.loadPct = 0;
       state.power = 0;
       state.bearingTemp = 30;
+      state.coolingWaterOutletTemp = 60;
       state.lubeOilTemp = 40;
       state.lubeOilPressure = 3.1; // STOP 待机滑油压力
       state.scavPressure = 1.0;

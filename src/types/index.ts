@@ -51,6 +51,7 @@ export interface EngineState {
   loadPct: number;
   power: number; // kW
   scavPressure: number; // bar(g)
+  coolingWaterOutletTemp: number; // ℃ 主机冷却水出口
   cylExhaust: number[]; // 8 个缸 ℃
   exhaustManifold: number; // ℃
   cylPmax: number[]; // 8 个缸 bar
