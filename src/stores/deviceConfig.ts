@@ -13,7 +13,6 @@ export interface SensorDeviceConfig {
   unitId: number;
   functionCode: number;
   timeoutMs: number;
-  pollIntervalMs: number;
   baudRate: number | null;
 }
 
@@ -32,6 +31,7 @@ export interface SensorTestReport {
   transport: SensorTransport;
   sensorType: SensorType;
   elapsedMs: number;
+  connectionReused: boolean;
   sampledAt: number;
   message: string;
   errorStage: string | null;
@@ -52,12 +52,20 @@ export interface DeviceConnectionState {
 export function defaultSensorConfig(): SensorDeviceConfig {
   return {
     ip: '192.168.0.177', port: 20108, transport: 'modbus-tcp', sensorType: 'single-axis',
-    unitId: 1, functionCode: 3, timeoutMs: 2000, pollIntervalMs: 1000, baudRate: 4800
+    unitId: 1, functionCode: 3, timeoutMs: 2000, baudRate: 4800
   };
 }
 
 const PREVIEW_KEY = 'ship.sensor-device.v1';
 const RECONNECT_DELAY_MS = 3000;
+
+function configFields(value: SensorDeviceConfig): SensorDeviceConfig {
+  // 兼容旧配置，只保留仍在使用的字段，移除已废弃的采集间隔。
+  return {
+    ip: value.ip, port: value.port, transport: value.transport, sensorType: value.sensorType,
+    unitId: value.unitId, functionCode: value.functionCode, timeoutMs: value.timeoutMs, baudRate: value.baudRate
+  };
+}
 
 function initialConnectionState(): DeviceConnectionState {
   return {
@@ -71,19 +79,23 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
   const loaded = ref(false);
   const connection = ref<DeviceConnectionState>(initialConnectionState());
   const latestRead = ref<SensorTestReport | null>(null);
+  const latestReport = ref<SensorTestReport | null>(null);
   const vibrationMeasurement = computed(() => {
     if (connection.value.status !== 'connected') return null;
     // 单轴传感器使用位移寄存器；三轴型号使用 X 轴，并在监测页标明来源。
     const key = config.value.sensorType === 'three-axis' ? 'displacement-x' : 'displacement';
     return latestRead.value?.measurements.find(item => item.key === key
+      && item.unit === 'μm' && Number.isFinite(item.value)
       && item.displacementMm !== null && Number.isFinite(item.displacementMm)) ?? null;
   });
   const vibrationDisplacementMm = computed(() => vibrationMeasurement.value?.displacementMm ?? null);
+  const vibrationDisplacementUm = computed(() => vibrationMeasurement.value?.value ?? null);
   let loading: Promise<void> | null = null;
   let configRevision = 0;
   let monitoring = false;
   let generation = 0;
   let monitorTimer: ReturnType<typeof setTimeout> | undefined;
+  let monitorRead: { config: SensorDeviceConfig; generation: number; promise: Promise<SensorTestReport> } | null = null;
   // 后台检测、单次测试和自动读取共用串行队列，避免争抢同一条 RS485 总线。
   let communicationTail: Promise<void> = import.meta.hot?.data.deviceCommunicationTail ?? Promise.resolve();
 
@@ -101,7 +113,7 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
       }
       // 保存新参数后，较早开始的加载请求不能覆盖新配置。
       if (revision === configRevision) {
-        config.value = restored;
+        config.value = configFields(restored);
         loaded.value = true;
       }
     })();
@@ -110,7 +122,7 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
   }
 
   async function save(value: SensorDeviceConfig) {
-    const normalized = { ...value, ip: value.ip.trim() };
+    const normalized = configFields({ ...value, ip: value.ip.trim() });
     if (isTauri()) {
       await invoke('save_device_config', { config: normalized });
     } else {
@@ -123,7 +135,7 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
   }
 
   function queuedTest(value: SensorDeviceConfig, action: 'connection' | 'read', isCurrent?: () => boolean) {
-    const normalized = { ...value, ip: value.ip.trim() };
+    const normalized = configFields({ ...value, ip: value.ip.trim() });
     const request = communicationTail.then(() => {
       if (isCurrent && !isCurrent()) throw new Error('连接检测已取消');
       return invoke<SensorTestReport>('test_sensor_device', { config: normalized, action });
@@ -134,6 +146,12 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
 
   async function test(value: SensorDeviceConfig, action: 'connection' | 'read') {
     if (!isTauri()) throw new Error('请在桌面客户端测试设备连接，浏览器预览不能直接连接 Modbus 网口。');
+    // A manual read of the monitored device joins the current request rather
+    // than issuing another one on the same RS485 bus.
+    if (action === 'read' && monitoring && monitorRead?.generation === generation
+      && JSON.stringify(configFields({ ...value, ip: value.ip.trim() })) === JSON.stringify(monitorRead.config)) {
+      return monitorRead.promise;
+    }
     return queuedTest(value, action);
   }
 
@@ -142,11 +160,19 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
     if (!isCurrent()) return;
     connection.value.reconnecting = connection.value.status === 'failed';
     connection.value.nextRetryAt = null;
+    let attempt: SensorTestReport | null = null;
     try {
       await load();
       if (!isCurrent()) return;
-      const result = await queuedTest(config.value, 'read', isCurrent);
+      const request = { config: configFields(config.value), generation: currentGeneration,
+        promise: queuedTest(config.value, 'read', isCurrent) };
+      monitorRead = request;
+      let result: SensorTestReport;
+      try { result = await request.promise; }
+      finally { if (monitorRead === request) monitorRead = null; }
       if (!isCurrent()) return;
+      attempt = result;
+      latestReport.value = result;
       if (!result.ok || result.measurements.length === 0) {
         throw new Error(result.message || '未收到有效传感器数据');
       }
@@ -157,6 +183,7 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
       };
     } catch (error) {
       if (!isCurrent()) return;
+      latestReport.value = attempt;
       latestRead.value = null;
       connection.value = {
         status: 'failed', message: error instanceof Error ? error.message : String(error),
@@ -165,9 +192,12 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
       };
     }
     if (!isCurrent()) return;
-    const delay = connection.value.status === 'failed'
-      ? RECONNECT_DELAY_MS : Math.max(1000, config.value.pollIntervalMs);
-    monitorTimer = setTimeout(() => void checkConnection(currentGeneration), delay);
+    if (connection.value.status === 'failed') {
+      monitorTimer = setTimeout(() => void checkConnection(currentGeneration), RECONNECT_DELAY_MS);
+    } else {
+      // 成功响应后直接继续，不加固定等待；串行队列保证上一条结束后才发送下一条。
+      void checkConnection(currentGeneration);
+    }
   }
 
   function startMonitoring() {
@@ -183,12 +213,20 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
   }
 
   function stopMonitoring() {
+    const wasMonitoring = monitoring;
     monitoring = false;
     generation++;
     if (monitorTimer !== undefined) clearTimeout(monitorTimer);
     monitorTimer = undefined;
     latestRead.value = null;
+    latestReport.value = null;
     connection.value = initialConnectionState();
+    if (wasMonitoring && isTauri()) {
+      // Close only after any in-flight read finishes. A restart queues its
+      // first read behind this close, so the new connection cannot be closed.
+      const close = communicationTail.then(() => invoke('close_sensor_connection'));
+      communicationTail = close.then(() => undefined, () => undefined);
+    }
   }
 
   function restartMonitoring() {
@@ -198,12 +236,12 @@ export const useDeviceConfigStore = defineStore('deviceConfig', () => {
 
   if (import.meta.hot) import.meta.hot.dispose(() => {
     import.meta.hot!.data.deviceMonitoring = monitoring;
-    import.meta.hot!.data.deviceCommunicationTail = communicationTail;
     stopMonitoring();
+    import.meta.hot!.data.deviceCommunicationTail = communicationTail;
   });
 
   return {
-    config, loaded, connection, latestRead, vibrationMeasurement, vibrationDisplacementMm,
+    config, loaded, connection, latestRead, latestReport, vibrationMeasurement, vibrationDisplacementMm, vibrationDisplacementUm,
     load, save, test, startMonitoring, stopMonitoring
   };
 });

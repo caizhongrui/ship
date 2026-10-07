@@ -3,6 +3,7 @@ use std::fs;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{IpAddr, SocketAddr, TcpStream};
 use std::sync::atomic::{AtomicU16, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tauri::Manager;
 
@@ -23,7 +24,7 @@ pub enum SensorType {
     ThreeAxis,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct DeviceConfig {
     pub ip: String,
@@ -33,8 +34,73 @@ pub struct DeviceConfig {
     pub unit_id: u8,
     pub function_code: u8,
     pub timeout_ms: u64,
-    pub poll_interval_ms: u64,
     pub baud_rate: Option<u32>,
+}
+
+// All readers share one serialised socket. Configuration changes and failed
+// exchanges discard it so that stale responses never reach the next request.
+#[derive(Clone, Default)]
+pub struct SensorClient(Arc<Mutex<SensorSession>>);
+
+#[derive(Default)]
+struct SensorSession {
+    connection: Option<SensorConnection>,
+}
+
+struct SensorConnection {
+    config: DeviceConfig,
+    stream: TcpStream,
+}
+
+impl SensorClient {
+    fn execute(&self, config: &DeviceConfig, action: TestAction) -> Result<TestReport, String> {
+        let mut session = self.0.lock().map_err(|_| "设备通信状态不可用")?;
+        if action == TestAction::Connection {
+            // A port test must make a real connection, not trust a cached socket.
+            execute_test(&mut SensorSession::default(), config, action)
+        } else {
+            execute_test(&mut session, config, action)
+        }
+    }
+
+    fn close(&self) -> Result<(), String> {
+        self.0.lock().map_err(|_| "设备通信状态不可用")?.connection = None;
+        Ok(())
+    }
+}
+
+impl SensorSession {
+    fn stream(
+        &mut self,
+        config: &DeviceConfig,
+        endpoint: SocketAddr,
+    ) -> Result<(&mut TcpStream, bool), DeviceError> {
+        let reused = self
+            .connection
+            .as_ref()
+            .is_some_and(|saved| saved.config == *config);
+        if !reused {
+            self.connection = None;
+            let timeout = Duration::from_millis(config.timeout_ms);
+            let stream = TcpStream::connect_timeout(&endpoint, timeout).map_err(|e| {
+                DeviceError::new(
+                    "连接网关",
+                    format!("网口连接失败：{e}。请检查 IP、端口、网线和网关 TCP 服务。"),
+                )
+            })?;
+            stream
+                .set_nodelay(true)
+                .map_err(|e| DeviceError::new("设置连接", e.to_string()))?;
+            stream
+                .set_write_timeout(Some(timeout))
+                .map_err(|e| DeviceError::new("设置超时", e.to_string()))?;
+            self.connection = Some(SensorConnection {
+                config: config.clone(),
+                stream,
+            });
+        }
+        Ok((&mut self.connection.as_mut().unwrap().stream, reused))
+    }
 }
 
 impl Default for DeviceConfig {
@@ -47,7 +113,6 @@ impl Default for DeviceConfig {
             unit_id: 1,
             function_code: 3,
             timeout_ms: 2000,
-            poll_interval_ms: 1000,
             baud_rate: Some(4800),
         }
     }
@@ -74,9 +139,6 @@ impl DeviceConfig {
         }
         if !(500..=10000).contains(&self.timeout_ms) {
             return Err("超时时间范围为 500–10000 毫秒".into());
-        }
-        if !(1000..=60000).contains(&self.poll_interval_ms) {
-            return Err("自动读取间隔范围为 1000–60000 毫秒".into());
         }
         if let Some(baud) = self.baud_rate {
             if ![1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200].contains(&baud) {
@@ -156,6 +218,7 @@ pub struct TestReport {
     transport: Transport,
     sensor_type: SensorType,
     elapsed_ms: u64,
+    connection_reused: bool,
     sampled_at: u64,
     message: String,
     error_stage: Option<String>,
@@ -182,14 +245,28 @@ impl DeviceError {
 pub async fn test_sensor_device(
     config: DeviceConfig,
     action: TestAction,
+    client: tauri::State<'_, SensorClient>,
 ) -> Result<TestReport, String> {
     config.validate()?;
-    tauri::async_runtime::spawn_blocking(move || execute_test(&config, action))
+    let client = client.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.execute(&config, action))
         .await
         .map_err(|e| format!("设备测试任务失败：{e}"))?
 }
 
-fn execute_test(config: &DeviceConfig, action: TestAction) -> Result<TestReport, String> {
+#[tauri::command]
+pub async fn close_sensor_connection(client: tauri::State<'_, SensorClient>) -> Result<(), String> {
+    let client = client.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || client.close())
+        .await
+        .map_err(|e| format!("关闭设备连接失败：{e}"))?
+}
+
+fn execute_test(
+    session: &mut SensorSession,
+    config: &DeviceConfig,
+    action: TestAction,
+) -> Result<TestReport, String> {
     let endpoint = config.validate()?;
     let started = Instant::now();
     let mut report = TestReport {
@@ -199,6 +276,7 @@ fn execute_test(config: &DeviceConfig, action: TestAction) -> Result<TestReport,
         transport: config.transport,
         sensor_type: config.sensor_type,
         elapsed_ms: 0,
+        connection_reused: false,
         sampled_at: 0,
         message: String::new(),
         error_stage: None,
@@ -207,16 +285,8 @@ fn execute_test(config: &DeviceConfig, action: TestAction) -> Result<TestReport,
         frames: Vec::new(),
     };
     let result = (|| {
-        let timeout = Duration::from_millis(config.timeout_ms);
-        let mut stream = TcpStream::connect_timeout(&endpoint, timeout).map_err(|e| {
-            DeviceError::new(
-                "连接网关",
-                format!("网口连接失败：{e}。请检查 IP、端口、网线和网关 TCP 服务。"),
-            )
-        })?;
-        stream
-            .set_write_timeout(Some(timeout))
-            .map_err(|e| DeviceError::new("设置超时", e.to_string()))?;
+        let (stream, reused) = session.stream(config, endpoint)?;
+        report.connection_reused = reused;
         if action == TestAction::Connection {
             return Ok(());
         }
@@ -226,7 +296,7 @@ fn execute_test(config: &DeviceConfig, action: TestAction) -> Result<TestReport,
             SensorType::ThreeAxis => &[(0, 7), (9, 4)],
         };
         for &(start, count) in blocks {
-            let registers = exchange(&mut stream, config, start, count, &mut report.frames)?;
+            let registers = exchange(stream, config, start, count, &mut report.frames)?;
             report
                 .registers
                 .extend(
@@ -253,6 +323,8 @@ fn execute_test(config: &DeviceConfig, action: TestAction) -> Result<TestReport,
             };
         }
         Err(e) => {
+            // Drop partial frames / closed sockets; the next read reconnects.
+            session.connection = None;
             report.error_stage = Some(e.stage.into());
             report.message = e.message;
         }
@@ -513,6 +585,281 @@ mod tests {
     use std::net::TcpListener;
     use std::thread;
 
+    fn serve_tcp_read(socket: &mut TcpStream) -> [u8; 12] {
+        socket
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut request = [0; 12];
+        socket.read_exact(&mut request).unwrap();
+        assert_eq!(&request[2..6], &[0, 0, 0, 6]);
+        assert_eq!(&request[8..12], &[0, 0, 0, 4]);
+        let mut response = request[..2].to_vec();
+        response.extend_from_slice(&[0, 0, 0, 11, request[6], request[7], 8]);
+        for value in [250u16, 10, 2100, 30] {
+            response.extend_from_slice(&value.to_be_bytes());
+        }
+        socket.write_all(&response).unwrap();
+        request
+    }
+
+    #[test]
+    fn persistent_client_reuses_one_socket_and_port_test_does_not_replace_it() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut previous_transaction = None;
+            for _ in 0..20 {
+                let request = serve_tcp_read(&mut socket);
+                let transaction = u16::from_be_bytes([request[0], request[1]]);
+                assert_ne!(Some(transaction), previous_transaction);
+                previous_transaction = Some(transaction);
+            }
+            let (mut probe, _) = listener.accept().unwrap();
+            probe
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            assert_eq!(probe.read(&mut [0; 1]).unwrap(), 0);
+            serve_tcp_read(&mut socket);
+            listener.set_nonblocking(true).unwrap();
+            assert_eq!(listener.accept().unwrap_err().kind(), ErrorKind::WouldBlock);
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        for index in 0..20 {
+            let result = client.execute(&config, TestAction::Read).unwrap();
+            assert!(result.ok, "{}", result.message);
+            assert_eq!(result.connection_reused, index > 0);
+            assert_eq!(result.measurements[2].value, 210.0);
+        }
+        assert!(client.execute(&config, TestAction::Connection).unwrap().ok);
+        assert!(
+            client
+                .execute(&config, TestAction::Read)
+                .unwrap()
+                .connection_reused
+        );
+        server.join().unwrap();
+        client.close().unwrap();
+    }
+
+    #[test]
+    fn persistent_rtu_function_04_reads_reuse_one_socket() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            socket
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            for sample in 0..10u16 {
+                let mut request = [0; 8];
+                socket.read_exact(&mut request).unwrap();
+                assert_eq!(&request[..6], &[12, 4, 0, 0, 0, 4]);
+                assert_eq!(
+                    u16::from_le_bytes([request[6], request[7]]),
+                    crc16(&request[..6])
+                );
+                let mut response = vec![12, 4, 8];
+                for value in [250u16, 10, 2100 + sample, 30] {
+                    response.extend_from_slice(&value.to_be_bytes());
+                }
+                response.extend_from_slice(&crc16(&response).to_le_bytes());
+                socket.write_all(&response).unwrap();
+            }
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            unit_id: 12,
+            function_code: 4,
+            transport: Transport::RtuOverTcp,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        for sample in 0..10 {
+            let result = client.execute(&config, TestAction::Read).unwrap();
+            assert!(result.ok, "{}", result.message);
+            assert_eq!(result.connection_reused, sample > 0);
+            assert_eq!(result.measurements[2].value, (2100 + sample) as f64 / 10.0);
+        }
+        server.join().unwrap();
+        client.close().unwrap();
+    }
+
+    #[test]
+    fn changed_parameters_and_explicit_close_rebuild_the_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            for unit in [1, 12, 12] {
+                let (mut socket, _) = listener.accept().unwrap();
+                assert_eq!(serve_tcp_read(&mut socket)[6], unit);
+                assert_eq!(socket.read(&mut [0; 1]).unwrap(), 0);
+            }
+        });
+        let mut config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        let first = client.execute(&config, TestAction::Read).unwrap();
+        assert!(first.ok && !first.connection_reused);
+        config.unit_id = 12;
+        let second = client.execute(&config, TestAction::Read).unwrap();
+        assert!(second.ok && !second.connection_reused);
+        client.close().unwrap();
+        let third = client.execute(&config, TestAction::Read).unwrap();
+        assert!(third.ok && !third.connection_reused);
+        client.close().unwrap();
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn partial_timeout_drops_the_socket_and_next_read_reconnects() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut stalled, _) = listener.accept().unwrap();
+            let mut request = [0; 12];
+            stalled.read_exact(&mut request).unwrap();
+            stalled.write_all(&request[..2]).unwrap();
+            thread::sleep(Duration::from_millis(600));
+            // A late remainder on the abandoned socket must never be consumed.
+            let _ = stalled.write_all(&[0, 0, 0, 11, 1, 3, 8, 0, 250, 0, 10, 8, 52, 0, 30]);
+            let (mut recovered, _) = listener.accept().unwrap();
+            serve_tcp_read(&mut recovered);
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            timeout_ms: 500,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        let failed = client.execute(&config, TestAction::Read).unwrap();
+        assert!(!failed.ok);
+        assert!(failed.message.contains("超时"));
+        assert_eq!(failed.frames[0].response.split_whitespace().count(), 2);
+        assert!(client.0.lock().unwrap().connection.is_none());
+        let recovered = client.execute(&config, TestAction::Read).unwrap();
+        assert!(
+            recovered.ok && !recovered.connection_reused,
+            "{}",
+            recovered.message
+        );
+        assert_eq!(recovered.measurements[2].value, 210.0);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn invalid_rtu_crc_discards_socket_before_recovery() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            for valid in [false, true] {
+                let (mut socket, _) = listener.accept().unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut request = [0; 8];
+                socket.read_exact(&mut request).unwrap();
+                let mut response = vec![1, 3, 8, 0, 250, 0, 10, 8, 52, 0, 30];
+                let crc = if valid {
+                    crc16(&response)
+                } else {
+                    crc16(&response) ^ 1
+                };
+                response.extend_from_slice(&crc.to_le_bytes());
+                socket.write_all(&response).unwrap();
+            }
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            transport: Transport::RtuOverTcp,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        let failed = client.execute(&config, TestAction::Read).unwrap();
+        assert!(!failed.ok && failed.message.contains("CRC"));
+        assert!(client.0.lock().unwrap().connection.is_none());
+        let recovered = client.execute(&config, TestAction::Read).unwrap();
+        assert!(recovered.ok && !recovered.connection_reused);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn closed_peer_is_detected_and_the_next_attempt_reconnects() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let (closed_tx, closed_rx) = std::sync::mpsc::channel();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            serve_tcp_read(&mut socket);
+            socket.shutdown(std::net::Shutdown::Both).unwrap();
+            closed_tx.send(()).unwrap();
+            let (mut recovered, _) = listener.accept().unwrap();
+            serve_tcp_read(&mut recovered);
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        assert!(client.execute(&config, TestAction::Read).unwrap().ok);
+        closed_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        let failed = client.execute(&config, TestAction::Read).unwrap();
+        assert!(!failed.ok && failed.connection_reused);
+        let recovered = client.execute(&config, TestAction::Read).unwrap();
+        assert!(recovered.ok && !recovered.connection_reused);
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn concurrent_callers_share_one_serialised_native_connection() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let server = thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            for _ in 0..8 {
+                serve_tcp_read(&mut socket);
+            }
+        });
+        let config = DeviceConfig {
+            ip: "127.0.0.1".into(),
+            port,
+            ..DeviceConfig::default()
+        };
+        let client = SensorClient::default();
+        let callers: Vec<_> = (0..8)
+            .map(|_| {
+                let client = client.clone();
+                let config = config.clone();
+                thread::spawn(move || client.execute(&config, TestAction::Read).unwrap())
+            })
+            .collect();
+        let reports: Vec<_> = callers
+            .into_iter()
+            .map(|caller| caller.join().unwrap())
+            .collect();
+        assert!(reports.iter().all(|report| report.ok));
+        assert_eq!(
+            reports
+                .iter()
+                .filter(|report| !report.connection_reused)
+                .count(),
+            1
+        );
+        server.join().unwrap();
+    }
+
     #[test]
     fn default_configuration_matches_gateway() {
         let config = DeviceConfig::default();
@@ -522,9 +869,19 @@ mod tests {
             serde_json::json!({
                 "ip": "192.168.0.177", "port": 20108, "transport": "modbus-tcp",
                 "sensorType": "single-axis", "unitId": 1, "functionCode": 3,
-                "timeoutMs": 2000, "pollIntervalMs": 1000, "baudRate": 4800
+                "timeoutMs": 2000, "baudRate": 4800
             })
         );
+    }
+
+    #[test]
+    fn legacy_poll_interval_is_ignored() {
+        let config: DeviceConfig =
+            serde_json::from_str(r#"{"ip":"192.168.0.177","pollIntervalMs":60000}"#).unwrap();
+        config.validate().unwrap();
+        let serialized = serde_json::to_value(config).unwrap();
+        assert_eq!(serialized["ip"], "192.168.0.177");
+        assert!(serialized.get("pollIntervalMs").is_none());
     }
 
     #[test]
@@ -656,7 +1013,8 @@ mod tests {
             transport: Transport::ModbusTcp,
             ..DeviceConfig::default()
         };
-        let result = execute_test(&config, TestAction::Read).unwrap();
+        let result =
+            execute_test(&mut SensorSession::default(), &config, TestAction::Read).unwrap();
         server.join().unwrap();
         assert!(result.ok, "{}", result.message);
         assert_eq!(result.frames.len(), 2);
@@ -691,7 +1049,8 @@ mod tests {
             transport: Transport::RtuOverTcp,
             ..DeviceConfig::default()
         };
-        let result = execute_test(&config, TestAction::Read).unwrap();
+        let result =
+            execute_test(&mut SensorSession::default(), &config, TestAction::Read).unwrap();
         server.join().unwrap();
         assert!(!result.ok);
         assert!(result.message.contains("CRC"));
@@ -733,7 +1092,8 @@ mod tests {
             function_code: 4,
             ..DeviceConfig::default()
         };
-        let result = execute_test(&config, TestAction::Read).unwrap();
+        let result =
+            execute_test(&mut SensorSession::default(), &config, TestAction::Read).unwrap();
         server.join().unwrap();
         assert!(result.ok, "{}", result.message);
         assert_eq!(result.measurements.len(), 4);
@@ -763,7 +1123,8 @@ mod tests {
             transport: Transport::ModbusTcp,
             ..DeviceConfig::default()
         };
-        let result = execute_test(&config, TestAction::Read).unwrap();
+        let result =
+            execute_test(&mut SensorSession::default(), &config, TestAction::Read).unwrap();
         server.join().unwrap();
         assert!(!result.ok);
         assert!(result.message.contains("超时"), "{}", result.message);

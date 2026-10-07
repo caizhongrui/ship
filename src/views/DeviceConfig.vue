@@ -54,10 +54,6 @@
               <span>通信超时（ms）</span>
               <input id="device-timeout" v-model.number="form.timeoutMs" type="number" min="500" max="10000" step="100" />
             </label>
-            <label class="field" for="device-interval">
-              <span>自动读取间隔（ms）</span>
-              <input id="device-interval" v-model.number="form.pollIntervalMs" type="number" min="1000" max="60000" step="500" />
-            </label>
             <label class="field wide" for="device-baud">
               <span>网关 RS485 侧波特率（备忘）</span>
               <select id="device-baud" v-model="form.baudRate">
@@ -72,7 +68,7 @@
             <button class="device-btn primary" type="submit" :disabled="loading || saving || !!busy || autoReading">{{ saving ? '保存中…' : '保存配置' }}</button>
             <button class="device-btn" type="button" :disabled="loading || saving || !!busy || autoReading || !dirty" @click="restoreConfig">还原已保存</button>
           </div>
-          <p class="form-footnote">保存后下次启动自动恢复。测试使用当前填写的参数。</p>
+          <p class="form-footnote">保存后下次启动自动恢复。单次测试使用当前参数；自动读取与后台监测共享已保存配置的采集结果，不重复发送请求。停止自动读取只暂停本页刷新，后台监测继续。</p>
         </form>
       </section>
 
@@ -92,6 +88,7 @@
               <div v-if="report" class="test-meta">
                 <span class="num">{{ report.endpoint }}</span>
                 <span>耗时 {{ report.elapsedMs }} ms</span>
+                <span v-if="report.action === 'read'">{{ report.connectionReused ? '长连接复用' : '新建连接' }}</span>
                 <span>{{ formatTime(report.sampledAt) }}</span>
                 <span v-if="report.errorStage">失败环节：{{ report.errorStage }}</span>
               </div>
@@ -164,7 +161,6 @@ const loadError = ref('');
 const testError = ref('');
 const report = ref<SensorTestReport | null>(null);
 const baudRates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200];
-let pollTimer: ReturnType<typeof setTimeout> | undefined;
 let active = true;
 
 const dirty = computed(() => JSON.stringify(form) !== JSON.stringify(store.config));
@@ -174,9 +170,15 @@ const transportHint = computed(() => form.transport === 'modbus-tcp'
   : '适用于串口服务器透明传输（例如当前网关的 TCP Server / 20108）；RTU 报文包含 CRC。');
 const sensorVersion = computed(() => report.value?.ok && form.sensorType === 'three-axis'
   ? report.value.registers.find(r => r.address === 9)?.raw ?? null : null);
-const statusClass = computed(() => busy.value ? 'working' : testError.value || report.value && !report.value.ok ? 'failed' : report.value?.ok ? 'success' : 'idle');
-const statusTitle = computed(() => busy.value ? '测试进行中' : testError.value || report.value && !report.value.ok ? '测试失败' : report.value?.ok ? report.value.action === 'connection' ? '网口连接成功' : '传感器读取成功' : '尚未测试');
-const statusMessage = computed(() => busy.value ? busy.value === 'connection' ? '正在连接网关 TCP 服务…' : '正在读取并校验传感器响应…' : testError.value || report.value?.message || '连接测试确认网关 TCP 服务可达；读取测试进一步确认传感器通信。');
+const statusClass = computed(() => autoReading.value
+  ? store.connection.status === 'failed' ? 'failed' : store.connection.status === 'connected' ? 'success' : 'working'
+  : busy.value ? 'working' : testError.value || report.value && !report.value.ok ? 'failed' : report.value?.ok ? 'success' : 'idle');
+const statusTitle = computed(() => autoReading.value
+  ? store.connection.status === 'failed' ? '读取失败，自动重连中' : store.connection.status === 'connected' ? '连续采集中' : '正在连接传感器'
+  : busy.value ? '测试进行中' : testError.value || report.value && !report.value.ok ? '测试失败' : report.value?.ok ? report.value.action === 'connection' ? '网口连接成功' : '传感器读取成功' : '尚未测试');
+const statusMessage = computed(() => autoReading.value
+  ? store.connection.status === 'connected' ? '与后台监测共享采集数据，收到响应后立即继续读取。' : store.connection.message
+  : busy.value ? busy.value === 'connection' ? '正在连接网关 TCP 服务…' : '正在读取并校验传感器响应…' : testError.value || report.value?.message || '连接测试确认网关 TCP 服务可达；读取测试进一步确认传感器通信。');
 
 function errorText(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function registerHex(value: number) { return `0x${value.toString(16).toUpperCase().padStart(4, '0')}`; }
@@ -189,7 +191,7 @@ function validate(): string {
   if (!validIp) return '请输入有效的网关 IPv4 或 IPv6 地址。';
   const ranges: [number, number, number, string][] = [
     [form.port, 1, 65535, 'TCP 端口'], [form.unitId, 1, 254, '传感器地址'],
-    [form.timeoutMs, 500, 10000, '通信超时'], [form.pollIntervalMs, 1000, 60000, '自动读取间隔']
+    [form.timeoutMs, 500, 10000, '通信超时']
   ];
   for (const [value, min, max, label] of ranges) {
     if (!Number.isInteger(value) || value < min || value > max) return `${label}须为 ${min}–${max} 范围内的整数。`;
@@ -211,7 +213,7 @@ async function saveConfig() {
 }
 
 function restoreConfig() { Object.assign(form, store.config); formError.value = ''; }
-function stopAutoRead() { autoReading.value = false; if (pollTimer) clearTimeout(pollTimer); pollTimer = undefined; }
+function stopAutoRead() { autoReading.value = false; }
 
 async function runTest(action: 'connection' | 'read') {
   if (!active || busy.value) return;
@@ -219,28 +221,32 @@ async function runTest(action: 'connection' | 'read') {
   if (formError.value) { stopAutoRead(); return; }
   busy.value = action;
   testError.value = '';
-  // 自动读取期间保留上一帧，避免每轮通信时清空数值；时间戳仍标明数据采集时间。
-  if (!autoReading.value) report.value = null;
+  report.value = null;
   try {
     const result = await store.test({ ...form }, action);
     if (!active) return;
     report.value = result;
-    if (!result.ok) stopAutoRead();
   } catch (error) {
     if (active) { testError.value = errorText(error); report.value = null; }
-    stopAutoRead();
   } finally {
     busy.value = '';
-    if (active && autoReading.value) pollTimer = setTimeout(() => void runTest('read'), form.pollIntervalMs);
   }
 }
 
 function toggleAutoRead() {
   if (autoReading.value) { stopAutoRead(); return; }
+  formError.value = validate();
+  if (formError.value) return;
+  if (dirty.value) { formError.value = '自动读取使用后台监测的已保存配置，请先保存当前参数。'; return; }
+  testError.value = '';
   autoReading.value = true;
-  void runTest('read');
+  store.startMonitoring();
+  report.value = store.latestReport;
 }
 
+watch(() => store.latestReport, value => {
+  if (active && autoReading.value) report.value = value;
+});
 watch(form, () => { report.value = null; testError.value = ''; formError.value = ''; });
 onMounted(async () => {
   try { await store.load(); if (active) Object.assign(form, store.config); }

@@ -15,10 +15,11 @@
             <div class="anno shaft-vib-label">中间轴振动位移</div>
             <div
               class="anno shaft-vib-value num"
-              :class="{ fault: vibrationHigh }"
+              :class="{ fault: vibrationHigh, 'device-vibration': props.vibrationSource === 'device' }"
               :title="vibrationDescription"
+              :data-unit="vibrationUnit"
             >
-              {{ shaftVibration === null ? '--' : shaftVibration.toFixed(2) }}
+              {{ displayedVibration === null ? '--' : displayedVibration.toFixed(vibrationDigits) }}
             </div>
           </div>
         </div>
@@ -36,9 +37,9 @@
           />
           <ValueDisplay
             label="轴系振动位移"
-            :value="shaftVibration ?? '--'"
-            unit="mm"
-            :digits="2"
+            :value="displayedVibration ?? '--'"
+            :unit="vibrationUnit"
+            :digits="vibrationDigits"
             :accent="vibrationHigh"
             :title="vibrationDescription"
           />
@@ -99,12 +100,16 @@ onMounted(() => {
 onUnmounted(() => diagramObserver?.disconnect());
 const shaftVibration = computed(() => props.vibrationSource === 'device'
   ? device.vibrationDisplacementMm : t.state.shaftVibration);
+const displayedVibration = computed(() => props.vibrationSource === 'device'
+  ? device.vibrationDisplacementUm : shaftVibration.value);
+const vibrationUnit = computed(() => props.vibrationSource === 'device' ? 'μm' : 'mm');
+const vibrationDigits = computed(() => props.vibrationSource === 'device' ? 1 : 2);
 const bearingHigh = computed(() => t.state.bearingTemp >= 58);
 const vibrationHigh = computed(() => shaftVibration.value !== null && shaftVibration.value > 0.2);
 const vibrationDescription = computed(() => {
   if (props.vibrationSource !== 'device') return '仿真振动位移';
   const source = device.config.sensorType === 'three-axis' ? '真实设备 X 轴振动位移' : '真实设备振动位移';
-  return shaftVibration.value === null ? `${source}：暂无有效读数，${device.connection.message}` : `${source}，已换算为 mm`;
+  return displayedVibration.value === null ? `${source}：暂无有效读数，${device.connection.message}` : `${source}，单位 μm`;
 });
 
 const trendSeries = computed(() => [
@@ -240,8 +245,11 @@ const trendSeries = computed(() => [
   left: 80%;
   top: 79%;
 }
+.anno.shaft-vib-value.device-vibration {
+  width: calc(86px * var(--annotation-scale));
+}
 .anno.shaft-vib-value::after {
-  content: ' mm';
+  content: ' ' attr(data-unit);
   font-size: calc(11px * var(--annotation-scale));
   opacity: 0.9;
 }
