@@ -5,7 +5,7 @@
       <div class="ind-panel diagram">
         <div class="ind-panel__title">轴 系 示 意 图</div>
         <div class="ind-panel__body shaft-body">
-          <div class="shaft-wrap">
+          <div ref="shaftWrap" class="shaft-wrap" :style="{ '--annotation-scale': annotationScale }">
             <img class="shaft-img" src="/zhouxi.jpg" alt="shaft system" />
             <!-- 使用统一的覆盖文字，避免底图文字随图片缩放后字号不一致 -->
             <div class="anno mb-temp-label">中间轴承温度</div>
@@ -16,8 +16,9 @@
             <div
               class="anno shaft-vib-value num"
               :class="{ fault: vibrationHigh }"
+              :title="vibrationDescription"
             >
-              {{ t.state.shaftVibration.toFixed(2) }}
+              {{ shaftVibration === null ? '--' : shaftVibration.toFixed(2) }}
             </div>
           </div>
         </div>
@@ -35,10 +36,11 @@
           />
           <ValueDisplay
             label="轴系振动位移"
-            :value="t.state.shaftVibration"
+            :value="shaftVibration ?? '--'"
             unit="mm"
             :digits="2"
             :accent="vibrationHigh"
+            :title="vibrationDescription"
           />
           <ValueDisplay label="主机转速" :value="t.state.rpm" unit="rpm" />
           <ValueDisplay
@@ -72,14 +74,38 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import TrendChart from '@/components/industrial/TrendChart.vue';
 import ValueDisplay from '@/components/industrial/ValueDisplay.vue';
 import { useTelemetryStore } from '@/stores/telemetry';
+import { useDeviceConfigStore } from '@/stores/deviceConfig';
+
+const props = withDefaults(defineProps<{
+  vibrationSource?: 'simulation' | 'device';
+}>(), { vibrationSource: 'simulation' });
 
 const t = useTelemetryStore();
+const device = useDeviceConfigStore();
+const shaftWrap = ref<HTMLElement | null>(null);
+const annotationScale = ref(1);
+let diagramObserver: ResizeObserver | undefined;
+onMounted(() => {
+  diagramObserver = new ResizeObserver(entries => {
+    const width = entries[0]?.contentRect.width;
+    if (width) annotationScale.value = Math.min(1, width / 1100);
+  });
+  if (shaftWrap.value) diagramObserver.observe(shaftWrap.value);
+});
+onUnmounted(() => diagramObserver?.disconnect());
+const shaftVibration = computed(() => props.vibrationSource === 'device'
+  ? device.vibrationDisplacementMm : t.state.shaftVibration);
 const bearingHigh = computed(() => t.state.bearingTemp >= 58);
-const vibrationHigh = computed(() => t.state.shaftVibration > 0.2);
+const vibrationHigh = computed(() => shaftVibration.value !== null && shaftVibration.value > 0.2);
+const vibrationDescription = computed(() => {
+  if (props.vibrationSource !== 'device') return '仿真振动位移';
+  const source = device.config.sensorType === 'three-axis' ? '真实设备 X 轴振动位移' : '真实设备振动位移';
+  return shaftVibration.value === null ? `${source}：暂无有效读数，${device.connection.message}` : `${source}，已换算为 mm`;
+});
 
 const trendSeries = computed(() => [
   {
@@ -148,10 +174,10 @@ const trendSeries = computed(() => [
 /* 两个数值框使用完全一致的字体、尺寸和颜色 */
 .anno.mb-temp,
 .anno.shaft-vib-value {
-  width: 68px;
+  width: calc(68px * var(--annotation-scale));
   box-sizing: border-box;
-  padding: 3px 7px;
-  font-size: 14px;
+  padding: calc(3px * var(--annotation-scale)) calc(7px * var(--annotation-scale));
+  font-size: calc(14px * var(--annotation-scale));
   font-weight: 700;
   color: #ffffff;
   background: linear-gradient(180deg, #2c5db5 0%, #1e4a99 100%);
@@ -169,7 +195,7 @@ const trendSeries = computed(() => [
 }
 .anno.mb-temp-label,
 .anno.shaft-vib-label {
-  font-size: 17px;
+  font-size: calc(17px * var(--annotation-scale));
   font-weight: 700;
   color: #0b4f82;
   letter-spacing: 0.5px;
@@ -179,7 +205,7 @@ const trendSeries = computed(() => [
   /* 覆盖底图自带标题，并让右边缘紧邻温度数值框 */
   left: 77.7%;
   top: 45.5%;
-  padding: 2px 6px;
+  padding: calc(2px * var(--annotation-scale)) calc(6px * var(--annotation-scale));
   transform: translate(-100%, -50%);
   background: #ffffff;
 }
@@ -188,13 +214,13 @@ const trendSeries = computed(() => [
   position: absolute;
   top: 0;
   left: 100%;
-  width: 44px;
+  width: calc(44px * var(--annotation-scale));
   height: 100%;
   background: #ffffff;
 }
 .anno.mb-temp::after {
   content: ' ℃';
-  font-size: 11px;
+  font-size: calc(11px * var(--annotation-scale));
   opacity: 0.9;
 }
 .anno.mb-temp.fault {
@@ -216,7 +242,7 @@ const trendSeries = computed(() => [
 }
 .anno.shaft-vib-value::after {
   content: ' mm';
-  font-size: 11px;
+  font-size: calc(11px * var(--annotation-scale));
   opacity: 0.9;
 }
 .anno.shaft-vib-value.fault {

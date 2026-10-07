@@ -162,7 +162,7 @@
                 ref="digitalHumanVideoRef"
                 class="digital-human-video"
                 :class="videoStage"
-                :src="videoStage === 'digital-human' ? '/digital-human.mp4?v=2' : '/maintenance-advice.mp4'"
+                :src="videoStage === 'digital-human' ? '/digital-human.mp4?v=3' : '/maintenance-advice.mp4'"
                 preload="auto"
                 playsinline
                 :aria-label="videoStage === 'digital-human' ? '数字人诊断视频' : '维修建议动画'"
@@ -173,13 +173,10 @@
         </div>
       </div>
 
-      <!-- 右：AI 流式分析 -->
+      <!-- 右：完整分析结果及维修建议 -->
       <div class="ind-panel ai-panel">
         <div class="ind-panel__title">
           <span class="ai-tag">AI</span> 故 障 分 析 及 维 修 建 议
-          <span v-if="typing" class="thinking-dots">
-            <span></span><span></span><span></span>
-          </span>
         </div>
         <div class="ind-panel__body ai-body">
           <div v-if="!snapshot" class="empty">等待分析</div>
@@ -242,11 +239,7 @@
               </div>
             </div>
           </div>
-          <pre v-else class="advice">{{ typedAdvice }}<span
-              v-if="typing"
-              class="caret"
-              >▊</span
-            ></pre>
+          <pre v-else class="advice">{{ analysisAdvice }}</pre>
         </div>
       </div>
     </div>
@@ -434,8 +427,8 @@ function splitStructuredAdvice(text: string) {
 }
 
 const structuredAdvice = computed(() => {
-  if (typing.value || !hasInteractiveDiagnosis.value) return null;
-  return splitStructuredAdvice(typedAdvice.value);
+  if (!hasInteractiveDiagnosis.value) return null;
+  return splitStructuredAdvice(analysisAdvice.value);
 });
 
 const confirmedChecks = computed(() =>
@@ -530,48 +523,12 @@ const maxCylTemp = computed(() =>
   t.state.cylExhaust.length ? Math.max(...t.state.cylExhaust) : 0
 );
 
-// === AI 打字机：首次流式，再次直接展示 ===
-const typedAdvice = ref('');
-const typing = ref(false);
-let typeTimer: number | null = null;
-let hasAnimatedOnce = false;
-
-function startTyping(text: string) {
-  if (typeTimer) clearInterval(typeTimer);
-  typedAdvice.value = '';
-  typing.value = true;
-  let i = 0;
-  typeTimer = window.setInterval(() => {
-    if (i >= text.length) {
-      clearInterval(typeTimer!);
-      typeTimer = null;
-      typing.value = false;
-      return;
-    }
-    typedAdvice.value += text[i];
-    i++;
-  }, 30);
-}
-
-function showAdvice(text: string) {
-  if (!hasAnimatedOnce) {
-    startTyping(text);
-    hasAnimatedOnce = true;
-  } else {
-    if (typeTimer) clearInterval(typeTimer);
-    typeTimer = null;
-    typedAdvice.value = text;
-    typing.value = false;
-  }
-}
+// 分析完成后一次性赋值，让全文和所有检查选项在同一次渲染中出现。
+const analysisAdvice = ref('');
 
 function clearAnalysis() {
-  if (typeTimer) clearInterval(typeTimer);
-  typeTimer = null;
   snapshot.value = null;
-  typedAdvice.value = '';
-  typing.value = false;
-  hasAnimatedOnce = false;
+  analysisAdvice.value = '';
   checkResults.value = {};
   propellerCameraVisited.value = false;
   stopDiagnosisVideos();
@@ -637,7 +594,7 @@ function onAnalyze() {
   else if (bearingOver && vibrationOver) advice = FINAL_ADVICE_BY_MODEL[selectedModel.value];
   else if (bearingOver) advice = ADVICE_BEARING_ONLY;
   else if (vibrationOver) advice = ADVICE_VIBRATION_ONLY;
-  showAdvice(advice);
+  analysisAdvice.value = advice;
 }
 
 async function onRepair() {
@@ -715,7 +672,6 @@ async function onRepair() {
 }
 
 onUnmounted(() => {
-  if (typeTimer) clearInterval(typeTimer);
   stopDiagnosisVideos();
 });
 </script>
@@ -1259,49 +1215,5 @@ onUnmounted(() => {
   letter-spacing: 1px;
   margin-right: 4px;
   vertical-align: 1px;
-}
-.thinking-dots {
-  display: inline-flex;
-  gap: 3px;
-  margin-left: 6px;
-  vertical-align: middle;
-}
-.thinking-dots span {
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--c-accent);
-  animation: tdots 1.2s infinite ease-in-out;
-}
-.thinking-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-.thinking-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-@keyframes tdots {
-  0%,
-  60%,
-  100% {
-    opacity: 0.2;
-    transform: translateY(0);
-  }
-  30% {
-    opacity: 1;
-    transform: translateY(-3px);
-  }
-}
-
-.caret {
-  display: inline-block;
-  color: var(--c-accent);
-  margin-left: 1px;
-  animation: blink 0.9s steps(2, start) infinite;
-  font-weight: 700;
-}
-@keyframes blink {
-  to {
-    opacity: 0;
-  }
 }
 </style>

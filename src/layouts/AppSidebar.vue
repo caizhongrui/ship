@@ -1,6 +1,6 @@
 <template>
   <aside class="app-sidebar">
-    <nav class="nav-list">
+    <nav ref="navList" class="nav-list" aria-label="模块菜单">
       <router-link
         v-for="item in items"
         :key="item.path"
@@ -30,12 +30,25 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import TelegraphLever from '@/components/controls/TelegraphLever.vue';
 
 const route = useRoute();
 const router = useRouter();
+const navList = ref<HTMLElement | null>(null);
+
+// 小窗口菜单可滚动，切换模块时保持当前菜单项可见。
+watch(() => route.path, async () => {
+  await nextTick();
+  const nav = navList.value;
+  const item = nav?.querySelector<HTMLElement>('.is-active');
+  if (!nav || !item) return;
+  const navRect = nav.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  if (itemRect.top < navRect.top) nav.scrollTop -= navRect.top - itemRect.top;
+  else if (itemRect.bottom > navRect.bottom) nav.scrollTop += itemRect.bottom - navRect.bottom;
+}, { immediate: true, flush: 'post' });
 
 interface NavItem {
   path: string;
@@ -59,9 +72,11 @@ function iconText(icon: string): string {
     power: '⌁',
     aux: '⊞',
     shaft: '◎',
+    vibration: '∿',
     alarm: '◮',
     trend: '⌇',
     report: '☰',
+    devices: '⚙',
     diag: '✜'
   };
   return map[icon] || '·';
@@ -87,8 +102,11 @@ function goBack() {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .nav-item {
+  flex-shrink: 0;
   height: 38px;
   display: flex;
   align-items: center;
@@ -135,6 +153,7 @@ function goBack() {
   min-height: 4px;
 }
 .nav-telegraph {
+  flex-shrink: 0;
   margin-bottom: 4px;
 }
 .nav-bottom {

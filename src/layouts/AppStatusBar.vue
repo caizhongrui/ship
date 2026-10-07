@@ -16,7 +16,7 @@
         <span v-if="alarms.activeUnacked.length > 1" class="alarm-seq num">
           {{ (alarms.cycleIndex % alarms.activeUnacked.length) + 1 }}/{{ alarms.activeUnacked.length }}
         </span>
-        {{ activeAlarm!.message }}
+        <span class="alarm-message">{{ activeAlarm!.message }}</span>
       </template>
       <template v-else-if="lastAlarm">
         <span class="alarm-dot" :class="`L${lastAlarm.level}`"></span>
@@ -27,6 +27,16 @@
         系统正常
       </template>
     </span>
+    <router-link
+      to="/devices"
+      class="seg device-connection"
+      :class="device.connection.status"
+      :title="connectionTooltip"
+      :aria-label="connectionTooltip"
+    >
+      <span class="device-dot"></span>
+      <span role="status" aria-live="polite">{{ connectionLabel }}</span>
+    </router-link>
     <span class="seg">v2.0.5</span>
   </footer>
 </template>
@@ -35,10 +45,27 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useSessionStore } from '@/stores/session';
 import { useAlarmStore } from '@/stores/alarms';
+import { useDeviceConfigStore } from '@/stores/deviceConfig';
 import { simSetTimeScale } from '@/engine/simRuntime';
 
 const session = useSessionStore();
 const alarms = useAlarmStore();
+const device = useDeviceConfigStore();
+
+const connectionLabel = computed(() => {
+  switch (device.connection.status) {
+    case 'connected': return '设备连接成功';
+    case 'failed': return device.connection.reconnecting ? '设备连接失败 · 正在重连' : '设备连接失败 · 自动重连';
+    case 'connecting': return '设备连接中…';
+    case 'unavailable': return '设备连接：仅桌面客户端';
+    default: return '设备未连接';
+  }
+});
+const connectionTooltip = computed(() => {
+  const endpoint = `${device.config.ip}:${device.config.port}`;
+  const retries = device.connection.retryCount ? `；已连续失败 ${device.connection.retryCount} 次，每 3 秒自动重连` : '';
+  return `${connectionLabel.value} · ${endpoint}；${device.connection.message}${retries}。点击打开设备配置`;
+});
 
 const rates = [1, 2, 5, 8, 10];
 const rate = ref<number>(session.timeScale);
@@ -58,8 +85,12 @@ function refresh() {
 onMounted(() => {
   refresh();
   t = window.setInterval(refresh, 1000);
+  device.startMonitoring();
 });
-onUnmounted(() => t && clearInterval(t));
+onUnmounted(() => {
+  if (t) clearInterval(t);
+  device.stopMonitoring();
+});
 
 const lastAlarm = computed(() =>
   alarms.history.length ? alarms.history[alarms.history.length - 1] : null
@@ -86,9 +117,31 @@ const hasActiveAlarm = computed(() => activeAlarm.value !== null);
 }
 .flex-grow {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   text-align: left;
   color: #fff;
 }
+.device-connection {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 3px;
+}
+.device-connection:hover { text-decoration: underline; }
+.device-connection:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.device-dot { width: 8px; height: 8px; flex-shrink: 0; border-radius: 50%; background: #d0ceda; }
+.device-connection.connected { color: #d2f2d1; }
+.connected .device-dot { background: var(--c-ok); }
+.device-connection.failed { color: #ffd3d3; }
+.failed .device-dot { background: #ff7676; }
+.connecting .device-dot { background: #f0ce72; }
+.device-connection.unavailable { color: #d0ceda; }
+.alarm-message { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .rate-seg {
   display: inline-flex;
   align-items: center;
@@ -163,5 +216,10 @@ const hasActiveAlarm = computed(() => activeAlarm.value !== null);
 }
 .ok-dot {
   background: var(--c-ok);
+}
+@media (max-width: 1200px) {
+  .app-statusbar { height: auto; min-height: var(--status-h); flex-wrap: wrap; padding: 4px 8px; gap: 5px 12px; }
+  .flex-grow { flex-basis: 140px; }
+  .flex-grow.alarm-active { height: 24px; margin: 0; font-size: 12px; padding: 0 6px; }
 }
 </style>

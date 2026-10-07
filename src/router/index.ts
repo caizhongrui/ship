@@ -30,6 +30,13 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ShaftMonitor.vue')
   },
   {
+    path: '/vibration',
+    name: 'vibration',
+    meta: { title: '震动实时监测', icon: 'vibration' },
+    component: () => import('@/views/ShaftMonitor.vue'),
+    props: { vibrationSource: 'device' }
+  },
+  {
     path: '/alarms',
     name: 'alarms',
     meta: { title: '报警记录', icon: 'alarm' },
@@ -46,6 +53,12 @@ const routes: RouteRecordRaw[] = [
     name: 'diag',
     meta: { title: '故障诊断', icon: 'diag', highlight: true },
     component: () => import('@/views/FaultDiagnosis.vue')
+  },
+  {
+    path: '/devices',
+    name: 'devices',
+    meta: { title: '设备配置', icon: 'devices' },
+    component: () => import('@/views/DeviceConfig.vue')
   },
   {
     path: '/report',
