@@ -30,6 +30,18 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/ShaftMonitor.vue')
   },
   {
+    path: '/shaft-load',
+    name: 'shaft-load',
+    meta: { title: '测量轴系负荷', icon: 'shaftLoad' },
+    component: () => import('@/views/ShaftLoad.vue')
+  },
+  {
+    path: '/arm-span',
+    name: 'arm-span',
+    meta: { title: '测量臂距差', icon: 'armSpan' },
+    component: () => import('@/views/ArmSpan.vue')
+  },
+  {
     path: '/vibration',
     name: 'vibration',
     meta: { title: '震动实时监测', icon: 'vibration' },

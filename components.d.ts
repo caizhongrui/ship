@@ -17,6 +17,7 @@ declare module 'vue' {
     ElTable: typeof import('element-plus/es')['ElTable']
     ElTableColumn: typeof import('element-plus/es')['ElTableColumn']
     FeelerGauge: typeof import('./src/components/controls/FeelerGauge.vue')['default']
+    MeasurementAnimation: typeof import('./src/components/industrial/MeasurementAnimation.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     RpmGauge: typeof import('./src/components/industrial/RpmGauge.vue')['default']

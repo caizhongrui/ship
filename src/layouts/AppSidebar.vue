@@ -6,7 +6,7 @@
         :key="item.path"
         :to="item.path"
         class="nav-item"
-        :class="{ 'is-active': route.path.startsWith(item.path) }"
+        :class="{ 'is-active': route.path === item.path || route.path.startsWith(`${item.path}/`) }"
       >
         <span class="nav-icon">{{ iconText(item.icon) }}</span>
         <span class="nav-label">{{ item.title }}</span>
@@ -72,6 +72,8 @@ function iconText(icon: string): string {
     power: '⌁',
     aux: '⊞',
     shaft: '◎',
+    shaftLoad: '⚖',
+    armSpan: '↔',
     vibration: '∿',
     alarm: '◮',
     trend: '⌇',
