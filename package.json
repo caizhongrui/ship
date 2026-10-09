@@ -8,6 +8,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "test:device": "node scripts/test-device-connection.mjs",
     "test:shaft-load": "node scripts/test-shaft-load.mjs",
+    "test:diagnosis-video": "node scripts/test-diagnosis-video.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

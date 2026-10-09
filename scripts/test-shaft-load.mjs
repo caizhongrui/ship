@@ -8,7 +8,7 @@ import ts from 'typescript';
 const pageSource = readFileSync(new URL('../src/components/industrial/MeasurementAnimation.vue', import.meta.url), 'utf8');
 const script = pageSource.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1];
 const compiled = ts.transpileModule(`${script}
-export { videoRef, isPlaying, isStarting, playbackError, currentTime, duration,
+export { playerRef, videoRef, isPlaying, isStarting, playbackError, currentTime, duration,
   statusText, startPlayback, pausePlayback, onPlaying, onPaused, onEnded,
   updateProgress, onVideoError, formatTime };`, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
@@ -16,6 +16,8 @@ export { videoRef, isPlaying, isStarting, playbackError, currentTime, duration,
 
 function player(src = '/shaft-load.mp4') {
   const hooks = [];
+  const mounts = [];
+  const keyListeners = new Set();
   const calls = { play: 0, pause: 0, load: 0 };
   const media = {
     currentTime: 0, duration: 32.267, ended: false, error: null,
@@ -23,16 +25,40 @@ function player(src = '/shaft-load.mp4') {
     pause() { calls.pause++; },
     load() { calls.load++; }
   };
-  const context = vm.createContext({ exports: {},
+  const context = vm.createContext({ exports: {}, Element: KeyTarget,
+    window: {
+      addEventListener(name, listener) { assert.equal(name, 'keydown'); keyListeners.add(listener); },
+      removeEventListener(name, listener) { assert.equal(name, 'keydown'); keyListeners.delete(listener); }
+    },
     defineProps: () => ({ src, title: '测量演示', label: '测量演示动画' }),
     require(name) {
-    assert.equal(name, 'vue');
-    return { ...vue, onBeforeUnmount: callback => hooks.push(callback) };
-  } });
+      assert.equal(name, 'vue');
+      return { ...vue, onBeforeUnmount: callback => hooks.push(callback), onMounted: callback => mounts.push(callback) };
+    }
+  });
   vm.runInContext(compiled, context);
   const page = context.exports;
   page.videoRef.value = media;
-  return { page, media, calls, close() { hooks.forEach(callback => callback()); } };
+  page.playerRef.value = { contains: element => element.inPlayer };
+  mounts.forEach(callback => callback());
+  return {
+    page, media, calls, keyListeners,
+    key(overrides = {}) {
+      const event = { code: 'Space', key: ' ', repeat: false, target: null,
+        defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...overrides };
+      keyListeners.forEach(listener => listener(event));
+      return event;
+    },
+    close() { hooks.forEach(callback => callback()); }
+  };
+}
+
+class KeyTarget {
+  constructor(kind, inPlayer = false) { this.kind = kind; this.inPlayer = inPlayer; }
+  closest(selector) {
+    if (selector.startsWith('input')) return ['input', 'textarea', 'select', 'editable', 'textbox', 'combobox'].includes(this.kind) ? this : null;
+    return ['button', 'link', 'menuitem', 'option'].includes(this.kind) ? this : null;
+  }
 }
 
 test('both measurement menus route to separate videos using the shared player', () => {
@@ -43,8 +69,8 @@ test('both measurement menus route to separate videos using the shared player', 
   assert.ok(sidebar.includes('route.path === item.path || route.path.startsWith(`${item.path}/`)'));
   assert.ok(!'/shaft-load'.startsWith('/shaft/'));
   for (const [view, title, asset] of [
-    ['ShaftLoad', '测量轴系负荷', '/shaft-load.mp4'],
-    ['ArmSpan', '测量臂距差', '/arm-span.mp4']
+    ['ShaftLoad', '测量轴系负荷', '/shaft-load.mp4?v=2'],
+    ['ArmSpan', '测量臂距差', '/arm-span.mp4?v=2']
   ]) {
     const wrapper = readFileSync(new URL(`../src/views/${view}.vue`, import.meta.url), 'utf8');
     assert.ok(wrapper.includes('<MeasurementAnimation'));
@@ -53,6 +79,14 @@ test('both measurement menus route to separate videos using the shared player', 
   }
   assert.match(pageSource, /:src="props.src"/);
   assert.doesNotMatch(pageSource, /\bautoplay\b/);
+  assert.doesNotMatch(pageSource, /@click="pausePlayback"/);
+  assert.match(pageSource, /按空格键暂停，再按空格键继续播放/);
+});
+
+test('both animations fill the playback region without black letterbox backgrounds', () => {
+  const styles = pageSource.match(/<style scoped>([\s\S]*?)<\/style>/)[1];
+  assert.match(styles, /\.animation-stage\s*\{[^}]*background:\s*var\(--c-bg-panel\)/);
+  assert.match(styles, /\.animation-stage video\s*\{[^}]*object-fit:\s*fill/);
 });
 
 test('separate page instances cannot carry playback state into another animation', async () => {
@@ -96,7 +130,7 @@ test('finished animation restarts from the beginning', async () => {
   h.media.currentTime = h.media.duration;
   h.media.ended = true;
   h.page.onEnded();
-  assert.equal(h.page.statusText.value, '播放结束，可点击开始重播');
+  assert.equal(h.page.statusText.value, '播放结束，可点击开始或按空格键重播');
   await h.page.startPlayback();
   assert.equal(h.media.currentTime, 0);
   assert.equal(h.calls.play, 1);
@@ -165,4 +199,77 @@ test('progress formatting handles metadata not loaded yet and actual video durat
   assert.equal(h.page.currentTime.value, 12.5);
   assert.equal(h.page.formatTime(h.page.duration.value), '00:32');
   assert.equal(h.page.formatTime(65.1), '01:05');
+});
+
+for (const src of ['/shaft-load.mp4', '/arm-span.mp4']) {
+  test(`${src}: Space starts, pauses and resumes without losing the position`, async () => {
+    const h = player(src);
+    assert.equal(h.keyListeners.size, 1);
+    assert.equal(h.key().defaultPrevented, true);
+    await Promise.resolve();
+    h.page.onPlaying();
+    assert.equal(h.calls.play, 1);
+    h.media.currentTime = 9.5;
+    h.key();
+    assert.equal(h.page.statusText.value, '已暂停');
+    assert.equal(h.calls.pause, 1);
+    assert.equal(h.media.currentTime, 9.5);
+    h.key();
+    await Promise.resolve();
+    h.page.onPlaying();
+    assert.equal(h.calls.play, 2);
+    assert.equal(h.media.currentTime, 9.5);
+    h.close();
+    assert.equal(h.keyListeners.size, 0);
+    assert.equal(h.key().defaultPrevented, false);
+    assert.equal(h.calls.play, 2, 'Shortcuts are removed when leaving the page');
+  });
+}
+
+test('Space never interferes with typing, other controls, composing or modified shortcuts', () => {
+  const h = player();
+  for (const kind of ['input', 'textarea', 'select', 'editable', 'textbox', 'combobox', 'button', 'link', 'menuitem', 'option']) {
+    assert.equal(h.key({ target: new KeyTarget(kind) }).defaultPrevented, false, kind);
+  }
+  for (const overrides of [
+    {code: 'Enter', key: 'Enter'}, {ctrlKey: true}, {altKey: true}, {metaKey: true},
+    {shiftKey: true}, {isComposing: true}, {defaultPrevented: true}
+  ]) h.key(overrides);
+  assert.equal(h.calls.play, 0);
+  assert.equal(h.calls.pause, 0);
+});
+
+test('holding Space does not repeatedly toggle and a focused player button triggers only one toggle', async () => {
+  const h = player();
+  assert.equal(h.key({repeat: true}).defaultPrevented, true);
+  assert.equal(h.calls.play, 0);
+  h.key({target: new KeyTarget('button', true)});
+  await Promise.resolve();
+  h.page.onPlaying();
+  assert.equal(h.calls.play, 1);
+  h.key({repeat: true});
+  assert.equal(h.calls.pause, 0);
+  h.key({target: new KeyTarget('button', true)});
+  assert.equal(h.calls.pause, 1);
+  assert.equal(h.page.statusText.value, '已暂停');
+});
+
+test('Space can cancel a pending start and replay a finished animation', async () => {
+  const h = player();
+  let finish;
+  h.media.play = () => new Promise(resolve => { h.calls.play++; finish = resolve; });
+  const pending = h.page.startPlayback();
+  h.key();
+  assert.equal(h.page.isStarting.value, false);
+  finish();
+  await pending;
+  assert.equal(h.page.playbackError.value, '');
+  h.media.play = async () => { h.calls.play++; };
+  h.media.currentTime = h.media.duration;
+  h.media.ended = true;
+  h.page.onEnded();
+  h.key();
+  await Promise.resolve();
+  assert.equal(h.media.currentTime, 0);
+  assert.equal(h.calls.play, 2);
 });

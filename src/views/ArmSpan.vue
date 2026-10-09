@@ -1,7 +1,7 @@
 <template>
   <MeasurementAnimation
     title="测量臂距差"
-    src="/arm-span.mp4"
+    src="/arm-span.mp4?v=2"
     label="测量臂距差演示动画"
   />
 </template>

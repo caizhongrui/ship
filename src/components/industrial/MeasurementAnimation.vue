@@ -1,5 +1,5 @@
 <template>
-  <div class="measurement-animation page">
+  <div ref="playerRef" class="measurement-animation page">
     <section class="ind-panel">
       <div class="ind-panel__title">{{ props.title }}</div>
       <div class="ind-panel__body playback-body">
@@ -9,10 +9,7 @@
             :disabled="isPlaying || isStarting"
             @click="startPlayback"
           >开始</el-button>
-          <el-button
-            :disabled="!isPlaying && !isStarting"
-            @click="pausePlayback"
-          >暂停</el-button>
+          <span class="playback-hint">按空格键暂停，再按空格键继续播放</span>
           <span class="playback-status" role="status" aria-live="polite">{{ statusText }}</span>
           <span class="playback-time num">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
         </div>
@@ -38,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 
 const props = defineProps<{
   title: string;
@@ -46,6 +43,7 @@ const props = defineProps<{
   label: string;
 }>();
 
+const playerRef = ref<HTMLElement | null>(null);
 const videoRef = ref<HTMLVideoElement | null>(null);
 const isPlaying = ref(false);
 const isStarting = ref(false);
@@ -62,7 +60,7 @@ const statusText = computed(() => {
   if (playbackError.value) return '播放失败';
   if (isStarting.value) return '正在加载…';
   if (isPlaying.value) return '播放中';
-  if (hasEnded.value) return '播放结束，可点击开始重播';
+  if (hasEnded.value) return '播放结束，可点击开始或按空格键重播';
   return hasStarted.value ? '已暂停' : '待播放';
 });
 
@@ -97,6 +95,24 @@ function pausePlayback() {
   isStarting.value = false;
   isPlaying.value = false;
   videoRef.value?.pause();
+}
+
+function onPlaybackKeydown(event: KeyboardEvent) {
+  if (disposed || event.defaultPrevented || event.isComposing ||
+      event.ctrlKey || event.altKey || event.metaKey || event.shiftKey ||
+      (event.code !== 'Space' && event.key !== ' ' && event.key !== 'Spacebar')) return;
+
+  const target = event.target instanceof Element ? event.target : null;
+  // Leave text entry, dropdowns and controls outside this player to the app.
+  if (target?.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"], [role="combobox"]')) return;
+  const control = target?.closest('button, a[href], [role="button"], [role="menuitem"], [role="option"]');
+  if (control && !playerRef.value?.contains(control)) return;
+
+  // Also prevent a focused start button from firing a second click on Space.
+  event.preventDefault();
+  if (event.repeat) return;
+  if (isPlaying.value || isStarting.value) pausePlayback();
+  else void startPlayback();
 }
 
 function onPlaying() {
@@ -138,8 +154,11 @@ function formatTime(seconds: number) {
   return `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 }
 
+onMounted(() => window.addEventListener('keydown', onPlaybackKeydown));
+
 onBeforeUnmount(() => {
   disposed = true;
+  window.removeEventListener('keydown', onPlaybackKeydown);
   pausePlayback();
 });
 </script>
@@ -168,12 +187,20 @@ onBeforeUnmount(() => {
   gap: 10px;
   flex-shrink: 0;
 }
-.playback-toolbar .el-button + .el-button {
-  margin-left: 0;
-}
-.playback-status {
+.playback-hint {
   color: var(--c-text-2);
   font-size: 13px;
+}
+.playback-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
 .playback-time {
   margin-left: auto;
@@ -191,7 +218,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-  background: #000;
+  background: var(--c-bg-panel);
   border: 1px solid var(--c-border-soft);
   border-radius: var(--radius);
 }
@@ -199,6 +226,6 @@ onBeforeUnmount(() => {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: fill;
 }
 </style>

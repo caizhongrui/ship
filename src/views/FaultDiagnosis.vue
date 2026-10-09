@@ -160,13 +160,11 @@
             >
               <video
                 ref="digitalHumanVideoRef"
-                class="digital-human-video"
-                :class="videoStage"
-                :src="videoStage === 'digital-human' ? '/digital-human.mp4?v=4' : '/maintenance-advice.mp4'"
+                class="digital-human-video digital-human"
+                src="/digital-human.mp4?v=4"
                 preload="auto"
                 playsinline
-                :aria-label="videoStage === 'digital-human' ? '数字人诊断视频' : '维修建议动画'"
-                @ended="onDiagnosisVideoEnded"
+                aria-label="数字人诊断视频"
               ></video>
             </section>
           </template>
@@ -267,7 +265,7 @@ const router = useRouter();
 const modelOptions = ['SFD-LLM', 'Qwen3', 'Deepseek-7B'] as const;
 type ModelName = (typeof modelOptions)[number];
 type CheckStatus = 'fault' | 'normal';
-type VideoStage = 'hidden' | 'digital-human' | 'maintenance';
+type VideoStage = 'hidden' | 'digital-human';
 const selectedModel = ref<ModelName>('SFD-LLM');
 
 const REPAIR_CHECKS_BY_MODEL: Record<ModelName, string[]> = {
@@ -459,7 +457,7 @@ async function setCheckResult(index: number, status: CheckStatus) {
 
   if (index !== repairChecks.value.length - 1) return;
   if (status === 'fault') {
-    await startDiagnosisVideoSequence();
+    await startDiagnosisVideo();
   } else {
     stopDiagnosisVideos();
   }
@@ -506,14 +504,8 @@ async function playCurrentDiagnosisVideo() {
   }
 }
 
-async function startDiagnosisVideoSequence() {
+async function startDiagnosisVideo() {
   videoStage.value = 'digital-human';
-  await playCurrentDiagnosisVideo();
-}
-
-async function onDiagnosisVideoEnded() {
-  if (videoStage.value !== 'digital-human') return;
-  videoStage.value = 'maintenance';
   await playCurrentDiagnosisVideo();
 }
 
@@ -1002,13 +994,6 @@ onUnmounted(() => {
 .digital-human-video.digital-human {
   width: auto;
   height: min(430px, 52vh);
-}
-
-.digital-human-video.maintenance {
-  width: 100%;
-  height: auto;
-  max-height: min(380px, 48vh);
-  aspect-ratio: 16 / 9;
 }
 
 /* === AI 区 === */
