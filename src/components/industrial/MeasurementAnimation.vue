@@ -9,7 +9,6 @@
             :disabled="isPlaying || isStarting"
             @click="startPlayback"
           >开始</el-button>
-          <span class="playback-hint">按空格键暂停，再按空格键继续播放</span>
           <span class="playback-status" role="status" aria-live="polite">{{ statusText }}</span>
           <span class="playback-time num">{{ formatTime(currentTime) }} / {{ formatTime(duration) }}</span>
         </div>
@@ -186,10 +185,6 @@ onBeforeUnmount(() => {
   flex-wrap: wrap;
   gap: 10px;
   flex-shrink: 0;
-}
-.playback-hint {
-  color: var(--c-text-2);
-  font-size: 13px;
 }
 .playback-status {
   position: absolute;

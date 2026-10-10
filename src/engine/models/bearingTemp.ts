@@ -4,6 +4,9 @@ import type { EngineState } from '@/types';
 const T_AMBIENT = 25;
 const BEARING_NOMINAL = 55;
 const BEARING_ALARM = 58;
+const SHAFT_FAULT_INTERVAL_SEC = 1;
+// 70 rpm 附近 ±0.03 rpm 的转速噪声不能反复重启同一轮故障计时。
+const SHAFT_FAULT_RESET_RPM = 69.9;
 
 // 主机转速 -> 轴系振动位移（mm），节点之间线性插值。
 // 60–69 rpm 逐步升至 0.16 mm，70 rpm 起进入 0.20–0.21 mm 报警区间。
@@ -36,24 +39,39 @@ function vibrationFromRpm(rpm: number) {
   return 0;
 }
 
-export function stepBearingTemp(
-  state: EngineState,
-  _dt: number,
-  faultScenarioEnabled = true
-) {
-  const rpm = Math.abs(state.rpm);
-  if (faultScenarioEnabled && rpm >= 75) {
-    // 75 rpm 时达到 58℃，随后仅小幅升至 58.2℃，触发温度高报警。
-    state.bearingTemp = BEARING_ALARM + Math.min((rpm - 75) / 5, 1) * 0.2;
-  } else {
-    // 70 rpm 前随转速线性升至标称 55℃，70–75 rpm 保持标称值。
-    state.bearingTemp =
-      T_AMBIENT +
-      (BEARING_NOMINAL - T_AMBIENT) * Math.min(rpm / 70, 1);
+export class BearingTempModel {
+  private vibrationFaultElapsed: number | null = null;
+
+  // elapsedSec 为未乘仿真速率的实际运行时间：暂停不计时，故障相隔 1 秒。
+  step(state: EngineState, elapsedSec: number, faultScenarioEnabled = true) {
+    const rpm = Math.abs(state.rpm);
+    const vibration = vibrationFromRpm(state.rpm);
+    // 故障修复后，满速运行也保持在 0.16 mm 正常范围内。
+    state.shaftVibration = faultScenarioEnabled
+      ? vibration
+      : Math.min(vibration, 0.16);
+
+    if (!faultScenarioEnabled || rpm < SHAFT_FAULT_RESET_RPM) {
+      this.reset();
+    } else if (this.vibrationFaultElapsed !== null) {
+      this.vibrationFaultElapsed += elapsedSec;
+    } else if (vibration > 0.2) {
+      // 首次振动超限的 tick 为起点，不能把此前正常运行时间算入间隔。
+      this.vibrationFaultElapsed = 0;
+    }
+
+    if (vibration > 0.2 && this.vibrationFaultElapsed !== null &&
+        this.vibrationFaultElapsed >= SHAFT_FAULT_INTERVAL_SEC - 1e-9) {
+      // 振动超限 1 秒后升至温度报警值；满速上限仍为 58.2℃。
+      state.bearingTemp = BEARING_ALARM + Math.max(0, Math.min((rpm - 75) / 5, 1)) * 0.2;
+    } else {
+      state.bearingTemp =
+        T_AMBIENT +
+        (BEARING_NOMINAL - T_AMBIENT) * Math.min(rpm / 70, 1);
+    }
   }
-  const vibration = vibrationFromRpm(state.rpm);
-  // 故障修复后，满速运行也保持在 0.16 mm 正常范围内。
-  state.shaftVibration = faultScenarioEnabled
-    ? vibration
-    : Math.min(vibration, 0.16);
+
+  reset() {
+    this.vibrationFaultElapsed = null;
+  }
 }

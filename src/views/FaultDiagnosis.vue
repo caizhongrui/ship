@@ -161,7 +161,7 @@
               <video
                 ref="digitalHumanVideoRef"
                 class="digital-human-video digital-human"
-                src="/digital-human.mp4?v=4"
+                src="/digital-human.mp4?v=5"
                 preload="auto"
                 playsinline
                 aria-label="数字人诊断视频"
@@ -272,7 +272,6 @@ const REPAIR_CHECKS_BY_MODEL: Record<ModelName, string[]> = {
   'SFD-LLM': [
     '轴系盘车检查：停机后手动盘车，检查运转平顺性',
     '润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障等问题',
-    '轴系对中检查：检查中间轴法兰螺栓马克标记，检查法兰偏移',
     '检查螺旋桨状态：检查螺旋桨是否有缠绕物或其他异常情况',
     '检查中间轴轴承间隙：核查中间轴轴承端面间隙'
   ],
@@ -305,9 +304,8 @@ const FINAL_ADVICE_BY_MODEL: Record<ModelName, string> = {
 三、维修建议
 1.轴系盘车检查：停机后手动盘车，检查运转平顺性；
 2.润滑冷却系统检查：检查轴承滑油油位、油质、排查冷却管路堵塞、阀门故障等问题；
-3.轴系对中检查：检查中间轴法兰螺栓马克标记，检查法兰偏移；
-4.检查螺旋桨状态：检查螺旋桨是否有缠绕物或其他异常情况；
-5.检查中间轴轴承间隙：核查中间轴轴承端面间隙；`,
+3.检查螺旋桨状态：检查螺旋桨是否有缠绕物或其他异常情况；
+4.检查中间轴轴承间隙：核查中间轴轴承端面间隙；`,
   Qwen3: `一、故障分析
 本次中间轴振动位移超标与中间轴承温度高报警，属于轴系运行异常引发的连锁故障，可由多项轴系及基座故障共同诱发。核心根源在于轴系装配偏差、运行工况异常及基座结构刚度缺陷三者叠加，导致轴系运转稳定性下降。
 具体表现为：轴系对中偏差、轴承间隙不当、润滑冷却不良、轴承基座加强筋强度不足、底座对位偏移等问题，均会引起轴系振动加剧、位移持续超标；同时，异常轴系载荷造成中间轴承摩擦过载、产热加剧，超出冷却润滑系统的散热能力，最终触发轴承温度超限报警。
@@ -468,7 +466,7 @@ function isCheckEnabled(index: number) {
 }
 
 function requiresPropellerCamera(index: number) {
-  return snapshot.value?.model === 'SFD-LLM' && index === 3;
+  return snapshot.value?.model === 'SFD-LLM' && index === 2;
 }
 
 function isChoiceEnabled(index: number) {
@@ -988,7 +986,12 @@ onUnmounted(() => {
   display: block;
   max-width: 100%;
   object-fit: contain;
-  background: #000;
+  background: transparent;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  /* 隐去视频缩放时可能露出的单像素解码边缘，不改变人物比例。 */
+  clip-path: inset(0 1px);
 }
 
 .digital-human-video.digital-human {

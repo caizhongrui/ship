@@ -13,7 +13,7 @@ import { stepRpm } from '@/engine/models/rpm';
 import { stepLoad } from '@/engine/models/load';
 import { stepExhaustTemp } from '@/engine/models/exhaustTemp';
 import { stepScavPressure } from '@/engine/models/scavPressure';
-import { stepBearingTemp } from '@/engine/models/bearingTemp';
+import { BearingTempModel } from '@/engine/models/bearingTemp';
 import { stepCoolingWaterOutletTemp } from '@/engine/models/coolingWaterTemp';
 import { stepElectric } from '@/engine/models/electric';
 import { AlarmEngine } from '@/engine/alarmEngine';
@@ -59,12 +59,14 @@ let scriptMode = true;
 // 初次训练启用两项轴系故障；执行故障修复后保持关闭，直到整轮重置。
 let shaftFaultScenarioEnabled = true;
 const alarmEngine = new AlarmEngine();
+const bearingTempModel = new BearingTempModel();
 
 let timer: number | null = null;
 let cylAccum = 0;
 let elecAccum = 0;
 let scavAccum = 0;
 let lastPostMs = 0;
+let lastTickMs = 0;
 
 function jitter(amp: number) {
   return (Math.random() - 0.5) * amp;
@@ -121,6 +123,9 @@ function applyOtherJitter() {
 
 function tick() {
   if (!running) return;
+  const nowMs = performance.now();
+  const elapsedSec = Math.max(0, nowMs - lastTickMs) / 1000;
+  lastTickMs = nowMs;
   const dt = (TICK_MS / 1000) * timeScale;
   state.t += dt;
 
@@ -159,7 +164,7 @@ function tick() {
   composeExhaust();
 
   // ===== 中间轴承温度 =====
-  stepBearingTemp(state, dt, shaftFaultScenarioEnabled);
+  bearingTempModel.step(state, elapsedSec, shaftFaultScenarioEnabled);
   stepCoolingWaterOutletTemp(state);
 
   for (let i = 0; i < 8; i++) {
@@ -178,7 +183,6 @@ function tick() {
 
   const alarms = alarmEngine.check(state, dt);
 
-  const nowMs = performance.now();
   const shouldPost = nowMs - lastPostMs >= UI_POST_MS || alarms.length > 0;
   if (shouldPost) {
     lastPostMs = nowMs;
@@ -227,6 +231,8 @@ self.onmessage = (e: MessageEvent) => {
   const msg = e.data;
   switch (msg.type) {
     case 'cmd.start':
+      // 重复开始不重置时钟；恢复运行时排除暂停期间经过的时间。
+      if (!running) lastTickMs = performance.now();
       running = true;
       lastPostMs = 0;
       if (!timer) timer = self.setInterval(tick, TICK_MS) as unknown as number;
@@ -256,6 +262,7 @@ self.onmessage = (e: MessageEvent) => {
       scriptMode = true;
       shaftFaultScenarioEnabled = true;
       alarmEngine.reset();
+      bearingTempModel.reset();
       postMessage({ type: 'tick', state: structuredClone(state), alarms: [] });
       break;
     case 'cmd.telegraph':
@@ -276,6 +283,7 @@ self.onmessage = (e: MessageEvent) => {
       // 集控/驾控模式下都一致：用户后续点档位（手动）或重新点开始（自动）才会再次驱动。
       state.faults = {};
       alarmEngine.reset();
+      bearingTempModel.reset();
       shaftFaultScenarioEnabled = false;
       // 回到启动剧本起点；随后 cmd.setMode 决定驾控自动启动或集控手动切档。
       // 轴系故障开关保持关闭，所以再次运行全程为正常工况。

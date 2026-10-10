@@ -18,7 +18,7 @@
         </div>
 
         <el-table :data="filtered" stripe size="small" height="calc(100% - 50px)">
-          <el-table-column prop="ts" label="时间" width="180">
+          <el-table-column prop="ts" label="时间" width="210">
             <template #default="{ row }">
               {{ fmt(row.ts) }}
             </template>
@@ -71,7 +71,8 @@ const filtered = computed(() => {
 });
 
 function fmt(ts: number) {
-  return new Date(ts * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  // 保留毫秒，避免 1 秒左右的报警间隔被整秒截断显示成相差 2 秒。
+  return new Date(Math.round(ts * 1000)).toISOString().replace('T', ' ').slice(0, 23);
 }
 </script>
 

@@ -1,7 +1,7 @@
 <template>
   <MeasurementAnimation
     title="测量轴系负荷"
-    src="/shaft-load.mp4?v=2"
+    src="/shaft-load.mp4?v=3"
     label="轴系负荷测量演示动画"
   />
 </template>
