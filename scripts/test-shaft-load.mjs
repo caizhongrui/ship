@@ -20,7 +20,7 @@ function player(src = '/shaft-load.mp4') {
   const keyListeners = new Set();
   const calls = { play: 0, pause: 0, load: 0 };
   const media = {
-    currentTime: 0, duration: 32.251, ended: false, error: null,
+    currentTime: 0, duration: src.startsWith('/arm-span.mp4') ? 23.336009 : 32.02, ended: false, error: null,
     async play() { calls.play++; },
     pause() { calls.pause++; },
     load() { calls.load++; }
@@ -69,8 +69,8 @@ test('both measurement menus route to separate videos using the shared player', 
   assert.ok(sidebar.includes('route.path === item.path || route.path.startsWith(`${item.path}/`)'));
   assert.ok(!'/shaft-load'.startsWith('/shaft/'));
   for (const [view, title, asset] of [
-    ['ShaftLoad', '测量轴系负荷', '/shaft-load.mp4?v=4'],
-    ['ArmSpan', '测量臂距差', '/arm-span.mp4?v=3']
+    ['ShaftLoad', '测量轴系负荷', '/shaft-load.mp4?v=5'],
+    ['ArmSpan', '测量臂距差', '/arm-span.mp4?v=4']
   ]) {
     const wrapper = readFileSync(new URL(`../src/views/${view}.vue`, import.meta.url), 'utf8');
     assert.ok(wrapper.includes('<MeasurementAnimation'));
@@ -193,11 +193,15 @@ test('progress formatting handles metadata not loaded yet and actual video durat
   h.media.duration = NaN;
   h.page.updateProgress();
   assert.equal(h.page.duration.value, 0);
-  h.media.duration = 32.251;
+  h.media.duration = 32.02;
   h.media.currentTime = 12.5;
   h.page.updateProgress();
   assert.equal(h.page.currentTime.value, 12.5);
   assert.equal(h.page.formatTime(h.page.duration.value), '00:32');
+  const span = player('/arm-span.mp4');
+  span.page.updateProgress();
+  assert.equal(span.page.duration.value, 23.336009);
+  assert.equal(span.page.formatTime(span.page.duration.value), '00:23');
   assert.equal(h.page.formatTime(65.1), '01:05');
 });
 
